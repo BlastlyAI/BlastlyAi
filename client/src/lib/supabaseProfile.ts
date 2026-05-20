@@ -37,6 +37,11 @@ function mapProfile(authUser: SupabaseAuthUser, row: UserProfileRow | null): App
   };
 }
 
+/** Profile from Auth only — used when public.users row missing or RLS blocks upsert. */
+export function profileFromAuthUser(authUser: SupabaseAuthUser): AppUser {
+  return mapProfile(authUser, null);
+}
+
 export async function upsertUserProfile(
   authUser: SupabaseAuthUser,
   fields?: {
@@ -47,20 +52,32 @@ export async function upsertUserProfile(
   client?: SupabaseClient
 ): Promise<AppUser> {
   const supabase = resolveClient(client);
-  const payload = {
+  const base = {
     id: authUser.id,
     email: authUser.email,
     display_name: fields?.displayName ?? authUser.user_metadata?.full_name ?? null,
-    business_name: fields?.businessName ?? null,
-    industry: fields?.industry ?? null,
     updated_at: new Date().toISOString(),
   };
 
-  const { data, error } = await supabase
+  const fullPayload = {
+    ...base,
+    business_name: fields?.businessName ?? null,
+    industry: fields?.industry ?? null,
+  };
+
+  let { data, error } = await supabase
     .from("users")
-    .upsert(payload, { onConflict: "id" })
+    .upsert(fullPayload, { onConflict: "id" })
     .select("*")
     .single();
+
+  if (error && /column|does not exist/i.test(error.message)) {
+    ({ data, error } = await supabase
+      .from("users")
+      .upsert(base, { onConflict: "id" })
+      .select("*")
+      .single());
+  }
 
   if (error) throw error;
   return mapProfile(authUser, data as UserProfileRow);
@@ -77,13 +94,24 @@ export async function fetchUserProfile(
     .eq("id", authUser.id)
     .maybeSingle();
 
-  if (error) throw error;
-
-  if (!data) {
-    return upsertUserProfile(authUser, undefined, supabase);
+  if (error) {
+    console.warn("[Blastly] public.users select failed, using auth metadata:", error.message);
+    return profileFromAuthUser(authUser);
   }
 
-  return mapProfile(authUser, data as UserProfileRow);
+  if (data) {
+    return mapProfile(authUser, data as UserProfileRow);
+  }
+
+  try {
+    return await upsertUserProfile(authUser, undefined, supabase);
+  } catch (upsertErr) {
+    console.warn(
+      "[Blastly] public.users upsert failed (run supabase/migrations/00000000000002_users_insert_policy.sql):",
+      upsertErr instanceof Error ? upsertErr.message : upsertErr
+    );
+    return profileFromAuthUser(authUser);
+  }
 }
 
 export async function completeWelcome(userId: string, client?: SupabaseClient): Promise<void> {
@@ -92,7 +120,9 @@ export async function completeWelcome(userId: string, client?: SupabaseClient): 
     .from("users")
     .update({ welcome_completed: true, updated_at: new Date().toISOString() })
     .eq("id", userId);
-  if (error) throw error;
+  if (error) {
+    console.warn("[Blastly] completeWelcome failed:", error.message);
+  }
 }
 
 export async function updateUserProfileFields(

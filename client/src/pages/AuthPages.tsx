@@ -606,8 +606,13 @@ export function AuthLogin() {
       await refresh();
       navigate("/command");
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Login failed");
-      await supabaseSignOut().catch(() => {});
+      const msg = e instanceof Error ? e.message : "Login failed";
+      if (/invalid login|invalid credentials|invalid_grant/i.test(msg)) {
+        toast.error("Wrong email or password.");
+        await supabaseSignOut().catch(() => {});
+      } else {
+        toast.error(msg);
+      }
     } finally {
       setAuthBusy(false);
     }

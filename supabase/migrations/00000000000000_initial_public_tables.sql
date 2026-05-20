@@ -100,6 +100,10 @@ drop policy if exists "Users update own" on public.users;
 create policy "Users update own" on public.users
   for update using (auth.uid() = id);
 
+drop policy if exists "Users insert own" on public.users;
+create policy "Users insert own" on public.users
+  for insert with check (auth.uid() = id);
+
 -- Posts: full CRUD for own rows
 drop policy if exists "Posts select own" on public.posts;
 create policy "Posts select own" on public.posts

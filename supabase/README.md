@@ -4,6 +4,7 @@ Run these SQL files **in order** in the Supabase SQL Editor:
 
 1. `migrations/00000000000000_initial_public_tables.sql` — `users`, `posts`, `notifications`, RLS, auth trigger
 2. `migrations/00000000000001_workspaces_and_profile_fields.sql` — profile columns, `workspaces`, default workspace trigger
+3. `migrations/00000000000002_users_insert_policy.sql` — **if login fails but user shows in Authentication → Users**
 
 ## Auth
 
