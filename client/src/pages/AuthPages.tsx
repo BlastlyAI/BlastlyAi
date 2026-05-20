@@ -401,18 +401,44 @@ export function AuthSignup() {
         toast.error(formatSupabaseAuthError(sb.error));
         return;
       }
-      if (!sb.data.user) {
-        toast.error("Sign up failed — please try again.");
-        return;
-      }
 
-      if (!sb.data.session) {
-        toast.success("Check your email to confirm your account, then log in.");
+      const authUser = sb.data.user;
+
+      // Email confirmation ON: user created but no session yet
+      if (authUser && !sb.data.session) {
+        try {
+          await upsertUserProfile(authUser, {
+            displayName: nameTrim,
+            businessName: businessName.trim() || undefined,
+            industry: industrySlug.trim() || undefined,
+          });
+        } catch {
+          /* trigger may have inserted profile; ignore if RLS blocks pre-confirm */
+        }
+        toast.success("Account created. Check your email to confirm, then log in.");
         navigate("/login");
         return;
       }
 
-      await upsertUserProfile(sb.data.user, {
+      // Supabase sometimes returns 200 with no user (already registered / anti-enumeration)
+      if (!authUser) {
+        const loginTry = await supabaseSignIn(emailTrim, password);
+        if (loginTry.data.session && loginTry.data.user) {
+          toast.success("You already have an account — logged you in.");
+          await refresh();
+          const profile = await fetchUserProfile(loginTry.data.user);
+          navigate(getPostSignupRoute(profile.welcomeCompleted));
+          return;
+        }
+        toast.info(
+          "If this email is new, check your inbox for a confirmation link. Otherwise use Log in.",
+          { duration: 8000 }
+        );
+        navigate("/login");
+        return;
+      }
+
+      await upsertUserProfile(authUser, {
         displayName: nameTrim,
         businessName: businessName.trim() || undefined,
         industry: industrySlug.trim() || undefined,
@@ -421,7 +447,20 @@ export function AuthSignup() {
       await refresh();
       navigate(getPostSignupRoute(false));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Sign up failed");
+      const msg = e instanceof Error ? e.message : "Sign up failed";
+      if (/does not exist|42P01|relation/i.test(msg)) {
+        toast.error(
+          "Database tables missing. In Supabase SQL Editor, run both files in supabase/migrations/.",
+          { duration: 10_000 }
+        );
+      } else if (/row-level security|42501|permission denied/i.test(msg)) {
+        toast.error(
+          "Could not save profile (RLS). Run supabase migrations in SQL Editor, then try again.",
+          { duration: 10_000 }
+        );
+      } else {
+        toast.error(msg);
+      }
       await supabaseSignOut().catch(() => {});
     } finally {
       setAuthBusy(false);
