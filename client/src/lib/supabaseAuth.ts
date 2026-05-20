@@ -85,8 +85,18 @@ export { NOT_CONFIGURED };
 export function formatSupabaseAuthError(error: {
   message?: string;
   status?: number;
+  code?: string;
 }): string {
   const msg = error.message ?? "Something went wrong";
+  if (
+    error.code === "over_email_send_rate_limit" ||
+    /email rate limit|over_email_send/i.test(msg)
+  ) {
+    return (
+      "Supabase email limit reached (too many signup/reset emails). " +
+      "Wait about 1 hour, or in Supabase turn off Confirm email for testing, then try again."
+    );
+  }
   if (
     error.status === 429 ||
     /after \d+ seconds/i.test(msg) ||
