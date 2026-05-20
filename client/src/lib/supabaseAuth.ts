@@ -80,3 +80,25 @@ export function supabaseOnAuthStateChange(
 }
 
 export { NOT_CONFIGURED };
+
+/** User-friendly message for Supabase Auth API errors (e.g. 429 rate limit). */
+export function formatSupabaseAuthError(error: {
+  message?: string;
+  status?: number;
+}): string {
+  const msg = error.message ?? "Something went wrong";
+  if (
+    error.status === 429 ||
+    /after \d+ seconds/i.test(msg) ||
+    /rate limit|too many requests/i.test(msg)
+  ) {
+    const wait = msg.match(/after (\d+) seconds/i)?.[1];
+    return wait
+      ? `Too many attempts. Please wait ${wait} seconds, then try again.`
+      : "Too many signup attempts. Please wait a minute and try again.";
+  }
+  if (/already registered|already been registered|user already exists/i.test(msg)) {
+    return "This email is already registered. Try logging in instead.";
+  }
+  return msg;
+}

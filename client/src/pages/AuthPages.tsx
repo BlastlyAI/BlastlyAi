@@ -15,6 +15,7 @@ import {
   supabaseResetPasswordForEmail,
   supabaseGetSession,
   supabaseUpdatePassword,
+  formatSupabaseAuthError,
 } from "@/lib/supabaseAuth";
 import { upsertUserProfile, completeWelcome, fetchUserProfile } from "@/lib/supabaseProfile";
 
@@ -397,7 +398,7 @@ export function AuthSignup() {
         data: { full_name: nameTrim },
       });
       if (sb.error) {
-        toast.error(sb.error.message);
+        toast.error(formatSupabaseAuthError(sb.error));
         return;
       }
       if (!sb.data.user) {
@@ -554,7 +555,7 @@ export function AuthLogin() {
     try {
       const res = await supabaseSignIn(emailTrim, password);
       if (res.error) {
-        toast.error(res.error.message);
+        toast.error(formatSupabaseAuthError(res.error));
         return;
       }
       if (res.data.user) {
