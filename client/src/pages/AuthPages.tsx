@@ -13,9 +13,10 @@ import {
   supabaseSignOut,
   supabaseSignUp,
   supabaseResetPasswordForEmail,
-  supabaseGetSession,
   supabaseUpdatePassword,
   formatSupabaseAuthError,
+  getSupabaseErrorMessage,
+  supabaseGetSession,
 } from "@/lib/supabaseAuth";
 import { upsertUserProfile, completeWelcome, fetchUserProfile } from "@/lib/supabaseProfile";
 
@@ -393,6 +394,7 @@ export function AuthSignup() {
     const nameTrim = name.trim();
 
     setAuthBusy(true);
+    let createdAuthUser: { id: string } | null = null;
     try {
       const sb = await supabaseSignUp(emailTrim, password, {
         data: { full_name: nameTrim },
@@ -403,18 +405,15 @@ export function AuthSignup() {
       }
 
       const authUser = sb.data.user;
+      const profileFields = {
+        displayName: nameTrim,
+        businessName: businessName.trim() || undefined,
+        industry: industrySlug.trim() || undefined,
+      };
 
       // Email confirmation ON: user created but no session yet
       if (authUser && !sb.data.session) {
-        try {
-          await upsertUserProfile(authUser, {
-            displayName: nameTrim,
-            businessName: businessName.trim() || undefined,
-            industry: industrySlug.trim() || undefined,
-          });
-        } catch {
-          /* trigger may have inserted profile; ignore if RLS blocks pre-confirm */
-        }
+        await upsertUserProfile(authUser, profileFields);
         toast.success("Account created. Check your email to confirm, then log in.");
         navigate("/login");
         return;
@@ -425,7 +424,11 @@ export function AuthSignup() {
         const loginTry = await supabaseSignIn(emailTrim, password);
         if (loginTry.data.session && loginTry.data.user) {
           toast.success("You already have an account — logged you in.");
-          await refresh();
+          try {
+            await refresh();
+          } catch {
+            /* session exists; profile loads on next page */
+          }
           const profile = await fetchUserProfile(loginTry.data.user);
           navigate(getPostSignupRoute(profile.welcomeCompleted));
           return;
@@ -438,16 +441,32 @@ export function AuthSignup() {
         return;
       }
 
-      await upsertUserProfile(authUser, {
-        displayName: nameTrim,
-        businessName: businessName.trim() || undefined,
-        industry: industrySlug.trim() || undefined,
-      });
+      createdAuthUser = authUser;
+      const profile = await upsertUserProfile(authUser, profileFields);
 
-      await refresh();
-      navigate(getPostSignupRoute(false));
+      try {
+        await refresh();
+      } catch (refreshErr) {
+        console.warn("[Blastly] refresh after signup:", refreshErr);
+      }
+
+      toast.success("Account created — welcome to Blastly!");
+      navigate(getPostSignupRoute(profile.welcomeCompleted));
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Sign up failed";
+      const msg = getSupabaseErrorMessage(e, "Sign up failed");
+      const sessionAfterError = await supabaseGetSession().catch(() => null);
+
+      if (createdAuthUser || sessionAfterError) {
+        toast.success("Account created. You're logged in.");
+        try {
+          await refresh();
+        } catch {
+          /* keep going — auth session is valid */
+        }
+        navigate("/welcome");
+        return;
+      }
+
       if (/does not exist|42P01|relation/i.test(msg)) {
         toast.error(
           "Database tables missing. In Supabase SQL Editor, run both files in supabase/migrations/.",
@@ -459,7 +478,11 @@ export function AuthSignup() {
           { duration: 10_000 }
         );
       } else {
-        toast.error(msg);
+        toast.error(
+          msg === "Sign up failed"
+            ? "Could not finish sign up. Try logging in — your account may already exist."
+            : msg
+        );
       }
       await supabaseSignOut().catch(() => {});
     } finally {
@@ -606,7 +629,21 @@ export function AuthLogin() {
       await refresh();
       navigate("/command");
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Login failed";
+      const msg = getSupabaseErrorMessage(e, "Login failed");
+      const sessionAfterError = await supabaseGetSession().catch(() => null);
+
+      if (sessionAfterError?.user) {
+        try {
+          await refresh();
+        } catch {
+          /* session valid */
+        }
+        const profile = await fetchUserProfile(sessionAfterError.user);
+        toast.success("Welcome back!");
+        navigate(profile.welcomeCompleted ? "/command" : "/welcome");
+        return;
+      }
+
       if (/invalid login|invalid credentials|invalid_grant/i.test(msg)) {
         toast.error("Wrong email or password.");
         await supabaseSignOut().catch(() => {});

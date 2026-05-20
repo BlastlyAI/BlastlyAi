@@ -79,7 +79,13 @@ export async function upsertUserProfile(
       .single());
   }
 
-  if (error) throw error;
+  if (error) {
+    console.warn(
+      "[Blastly] public.users upsert failed (run supabase/migrations/00000000000002_users_insert_policy.sql):",
+      error.message
+    );
+    return profileFromAuthUser(authUser);
+  }
   return mapProfile(authUser, data as UserProfileRow);
 }
 
@@ -103,15 +109,7 @@ export async function fetchUserProfile(
     return mapProfile(authUser, data as UserProfileRow);
   }
 
-  try {
-    return await upsertUserProfile(authUser, undefined, supabase);
-  } catch (upsertErr) {
-    console.warn(
-      "[Blastly] public.users upsert failed (run supabase/migrations/00000000000002_users_insert_policy.sql):",
-      upsertErr instanceof Error ? upsertErr.message : upsertErr
-    );
-    return profileFromAuthUser(authUser);
-  }
+  return upsertUserProfile(authUser, undefined, supabase);
 }
 
 export async function completeWelcome(userId: string, client?: SupabaseClient): Promise<void> {
