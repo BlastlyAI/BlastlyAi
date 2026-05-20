@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import { Check, Sparkles, Lock, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { getLoginUrl } from "@/const";
+import { getAppLoginPath } from "@/const";
 import { trpc } from "@/lib/trpc";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { toast } from "sonner";
@@ -63,7 +63,7 @@ export default function Pricing() {
 
   function handleStartTrial() {
     if (!user) {
-      window.location.href = getLoginUrl("/pricing");
+      window.location.href = getAppLoginPath("/pricing");
       return;
     }
     if (!wsId) {
@@ -92,7 +92,7 @@ export default function Pricing() {
               </Button>
             </Link>
           ) : (
-            <a href={getLoginUrl("/pricing")}>
+            <a href={getAppLoginPath("/pricing")}>
               <Button size="sm" variant="outline" style={{ borderColor: BORDER, color: TEXT }}>
                 Sign in
               </Button>
@@ -168,7 +168,7 @@ export default function Pricing() {
                 </Button>
               </Link>
             ) : (
-              <a href={getLoginUrl("/dashboard/home")} style={{ display: "block" }}>
+              <a href={getAppLoginPath("/command")} style={{ display: "block" }}>
                 <Button
                   variant="outline"
                   style={{ width: "100%", borderColor: BORDER, color: TEXT, background: "transparent", fontWeight: 600 }}

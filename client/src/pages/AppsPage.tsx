@@ -2,7 +2,7 @@ import { Link } from "wouter";
 import { ArrowRight, Zap, ExternalLink, FlaskConical, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { getLoginUrl } from "@/const";
+import { getAppLoginPath } from "@/const";
 import { useAuth } from "@/_core/hooks/useAuth";
 
 // ─── App registry ───────────────────────────────────────────────────────────
@@ -75,7 +75,7 @@ export default function AppsPage() {
                   <Button size="sm">Dashboard <ArrowRight className="w-4 h-4 ml-1" /></Button>
                 </Link>
               ) : (
-                <a href={getLoginUrl()}>
+                <a href={getAppLoginPath()}>
                   <Button size="sm">Sign In</Button>
                 </a>
               )}

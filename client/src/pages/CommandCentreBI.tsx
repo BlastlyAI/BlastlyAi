@@ -6,7 +6,7 @@ import { trpc } from "@/lib/trpc";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useTheme } from "@/contexts/ThemeContext";
-import { getLoginUrl } from "@/const";
+import { getAppLoginPath } from "@/const";
 import { toast } from "sonner";
 import {
   Camera, CheckCircle2, X, Calendar,
@@ -900,7 +900,7 @@ export default function CommandCentreBI() {
     );
   }
   if (!user) {
-    window.location.replace(getLoginUrl());
+    window.location.replace(getAppLoginPath("/command"));
     return null;
   }
 

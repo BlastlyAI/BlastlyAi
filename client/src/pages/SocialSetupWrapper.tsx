@@ -8,7 +8,7 @@ import { trpc } from "@/lib/trpc";
 import SocialSetup from "./SocialSetup";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
-import { getLoginUrl } from "@/const";
+import { getAppLoginPath } from "@/const";
 
 export default function SocialSetupWrapper() {
   const { data: user, isLoading: authLoading } = trpc.auth.me.useQuery();
@@ -28,7 +28,7 @@ export default function SocialSetupWrapper() {
       <div className="min-h-screen bg-[#0a0a0f] flex flex-col items-center justify-center gap-4 text-white">
         <p className="text-white/60">Please sign in to set up your social accounts.</p>
         <Button
-          onClick={() => { window.location.href = getLoginUrl(); }}
+          onClick={() => { window.location.href = getAppLoginPath(); }}
           className="bg-blue-600 hover:bg-blue-700"
         >
           Sign in

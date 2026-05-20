@@ -15,21 +15,18 @@ import { sdk } from "../_core/sdk";
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import { TRPCError } from "@trpc/server";
 import { notifyOwner } from "../_core/notification";
-import type { Response } from "express";
+import type { Request, Response } from "express";
+import { getSessionCookieOptions } from "../_core/cookies";
 
 const SALT_ROUNDS = 12;
 const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
-function setCookieOnResponse(res: Response, token: string) {
-  res.cookie(COOKIE_NAME, token, {
-    httpOnly: true,
-    secure: true,
-    sameSite: "lax",
-    maxAge: ONE_YEAR_MS,
-    path: "/",
-  });
+/** Same cookie rules as OAuth callback — `secure: false` on http://localhost. */
+function setCookieOnResponse(req: Request, res: Response, token: string) {
+  const cookieOptions = getSessionCookieOptions(req);
+  res.cookie(COOKIE_NAME, token, { ...cookieOptions, maxAge: ONE_YEAR_MS });
 }
 
 async function sendResetEmail(email: string, name: string | null, resetUrl: string) {
@@ -98,7 +95,7 @@ export const customAuthRouter = router({
       if (!newUser) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Signup failed" });
 
       const token = await sdk.createSessionToken(openId, { name: input.name });
-      setCookieOnResponse(ctx.res, token);
+      setCookieOnResponse(ctx.req, ctx.res, token);
 
       await notifyOwner({
         title: `New Blastly signup — ${input.email}`,
@@ -156,7 +153,7 @@ export const customAuthRouter = router({
         .where(eq(users.id, user.id));
 
       const token = await sdk.createSessionToken(user.openId, { name: user.name ?? "" });
-      setCookieOnResponse(ctx.res, token);
+      setCookieOnResponse(ctx.req, ctx.res, token);
 
       return {
         id: user.id,
@@ -255,7 +252,7 @@ export const customAuthRouter = router({
       const user = userRows[0];
       if (user) {
         const token = await sdk.createSessionToken(user.openId, { name: user.name ?? "" });
-        setCookieOnResponse(ctx.res, token);
+        setCookieOnResponse(ctx.req, ctx.res, token);
       }
 
       return { success: true };

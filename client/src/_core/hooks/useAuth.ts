@@ -1,5 +1,7 @@
-import { getLoginUrl } from "@/const";
+import { getAppLoginPath } from "@/const";
 import { trpc } from "@/lib/trpc";
+import { supabaseSignOut } from "@/lib/supabaseAuth";
+import { isSupabaseConfigured } from "@/lib/supabase";
 import { TRPCClientError } from "@trpc/client";
 import { useCallback, useEffect, useMemo } from "react";
 
@@ -9,7 +11,7 @@ type UseAuthOptions = {
 };
 
 export function useAuth(options?: UseAuthOptions) {
-  const { redirectOnUnauthenticated = false, redirectPath = getLoginUrl() } =
+  const { redirectOnUnauthenticated = false, redirectPath = getAppLoginPath() } =
     options ?? {};
   const utils = trpc.useUtils();
 
@@ -26,6 +28,9 @@ export function useAuth(options?: UseAuthOptions) {
 
   const logout = useCallback(async () => {
     try {
+      if (isSupabaseConfigured()) {
+        await supabaseSignOut().catch(() => {});
+      }
       await logoutMutation.mutateAsync();
     } catch (error: unknown) {
       if (

@@ -1,7 +1,7 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { trpc } from "@/lib/trpc";
-import { getLoginUrl } from "@/const";
+import { getAppLoginPath } from "@/const";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -453,7 +453,7 @@ export default function AppLayout({ children, title }: { children: ReactNode; ti
             className="h-12 w-auto object-contain mx-auto mb-4"
           />
           <p className="text-muted-foreground mb-4">Please sign in to access your dashboard.</p>
-          <a href={getLoginUrl()}><Button>Sign in</Button></a>
+          <a href={getAppLoginPath()}><Button>Sign in</Button></a>
         </div>
       </div>
     );

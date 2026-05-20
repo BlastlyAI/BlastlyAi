@@ -1,68 +1,92 @@
 # Blastly / Promoflow AI
 
-Full-stack app: **React (Vite) + Express + tRPC + MySQL (Drizzle)**.
+Full-stack app: **React (Vite) + Express + tRPC + MySQL (Drizzle)**.  
+**Supabase Auth** runs in the **browser** (same signup/login UI): Supabase user + `public.users` (via SQL trigger), then existing **`customAuth`** + MySQL + JWT cookie unchanged.
 
-## Local run (Windows)
+## Local run
 
 ```powershell
 cd promoflow-ai
-# Copy env and fill values (never commit `.env`)
 copy .env.example .env
-$env:NODE_ENV="development"
-npx tsx watch server/_core/index.ts
+# Fill .env (never commit it). Then:
+pnpm install
+# or: npm install   (repo uses pnpm-lock.yaml; package-lock.json is gitignored)
+pnpm run dev
+# or: npm run dev
 ```
 
-Open **http://localhost:3000/**
+Open **http://localhost:3000/** — `cross-env` makes **`npm run dev`** work on Windows.
 
-Install deps: `npx pnpm@10.4.1 install`
+## Supabase (hybrid)
+
+1. **Env (local + Vercel):** `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` — **publishable key only** (never `service_role` in `VITE_*`).
+2. **SQL:** Supabase → **SQL Editor** → run `supabase/migrations/00000000000000_initial_public_tables.sql` (see `supabase/README.md`). Ensures **`public.users`** sync from **`auth.users`** on signup.
+3. **Client:** `client/src/lib/supabase.ts`, `client/src/lib/supabaseAuth.ts`. Signup/login call Supabase first when env is set, then existing tRPC `customAuth`.
 
 ## GitHub
 
-Empty repo: [BlastlyAI/BlastlyAi](https://github.com/BlastlyAI/BlastlyAi)
+Repo: [BlastlyAI/BlastlyAi](https://github.com/BlastlyAI/BlastlyAi)
 
-```powershell
-git init
-git add .
-git commit -m "Initial import"
-git branch -M main
-git remote add origin https://github.com/BlastlyAI/BlastlyAi.git
-git push -u origin main
-```
+**Never commit:** `.env`, `.project-config.json`, Supabase **secret** keys, Stripe secrets, etc.
 
-Use a **Personal Access Token** or GitHub Desktop if HTTPS asks for password.
+---
 
-**Do not commit** `.env` or `.project-config.json` (secrets). They are listed in `.gitignore`.
+## Vercel deployment (static frontend)
 
-## Vercel (frontend only)
+| Setting | Value |
+|--------|--------|
+| **Framework preset** | None / Other (or Vite — `vercel.json` overrides build) |
+| **Root directory** | `.` (repository root) |
+| **Install** | Auto: Vercel detects **`pnpm-lock.yaml`** → `pnpm install` |
+| **Build command** | `pnpm run build:vercel` (already in **`vercel.json`**) |
+| **Output directory** | `dist/public` (already in **`vercel.json`**) |
 
-This repo builds a static SPA with `pnpm run build:vercel` → output **`dist/public`**.  
-`vercel.json` is included so Vercel runs that build and SPA fallback.
+`vercel.json` also sets SPA **rewrites** so client routes (e.g. `/command`, `/login`) resolve to `index.html`.
 
-1. Import [BlastlyAI/BlastlyAi](https://github.com/BlastlyAI/BlastlyAi) in Vercel.
-2. **Environment variables** (Vercel → Project → Settings → Environment Variables): copy from `.env.example` all keys that start with `VITE_`, plus **`VITE_API_ORIGIN`** when your API is not on the same domain.
+### Required environment variables (Vercel → Project → Settings → Environment Variables)
 
-### Split frontend (Vercel) + API (Railway, Fly.io, VPS, etc.)
+Add every **`VITE_*`** you use from local `.env` (Production + Preview as needed). Minimum for current app + Supabase hybrid:
 
-Set **`VITE_API_ORIGIN`** to your API base, e.g. `https://api.yourdomain.com` (no trailing slash).  
-Then the browser will call tRPC, OAuth callback URL, social connect redirects, and webhook docs URLs against that host.
+| Variable | Notes |
+|----------|--------|
+| `VITE_SUPABASE_URL` | e.g. `https://<ref>.supabase.co` |
+| `VITE_SUPABASE_ANON_KEY` | **Publishable / anon** key only |
+| `VITE_APP_ID` | Manus / app id if using Manus OAuth links |
+| `VITE_OAUTH_PORTAL_URL` | e.g. `https://manus.im` |
+| `VITE_APP_TITLE`, `VITE_APP_LOGO` | Branding |
+| `VITE_FRONTEND_FORGE_API_URL`, `VITE_FRONTEND_FORGE_API_KEY` | If Map / Forge features used |
+| `VITE_STRIPE_PUBLISHABLE_KEY` | Stripe.js (publishable only) |
+| `VITE_ANALYTICS_ENDPOINT`, `VITE_ANALYTICS_WEBSITE_ID` | If analytics enabled |
 
-Your API must send **CORS** headers for your Vercel origin and support **credentials** if you use cookies across origins (often easier to put API and app under one parent domain).
+**When the API is not on the Vercel domain** (static deploy only):
 
-## Supabase (later)
+| Variable | Example |
+|----------|---------|
+| `VITE_API_ORIGIN` | `https://api.yourdomain.com` (no trailing slash) |
 
-Supabase gives **PostgreSQL** + Auth + Storage. This project’s database layer is **MySQL** (`mysql2`, Drizzle `mysql` dialect). Moving “backend to Supabase” usually means:
+Without `VITE_API_ORIGIN`, the browser calls **`/api/trpc`** on the Vercel hostname — that only works if you **also** host the Express API on the same domain or add rewrites/proxy.
 
-- **Option A:** Use Supabase **only** for Auth / Storage / Edge Functions, and keep a MySQL-compatible DB elsewhere, **or** migrate schema + Drizzle to **Postgres** (larger change).
-- **Option B:** Use Supabase Postgres + rewrite Drizzle schema for `postgresql` — not a one-click switch.
+### Build notes
 
-Plan the DB before pointing `DATABASE_URL` at Supabase.
+- `pnpm run build:vercel` may log a **large JS chunk** warning from Vite; it does **not** fail the build.
+- Full server bundle: `pnpm run build` (Vite + `esbuild` for Express) — used for non-Vercel Node hosting, not required for static Vercel.
+
+### Production Supabase
+
+The Supabase client uses **`import.meta.env.VITE_*`**, inlined at **Vite build** time. Set the same variables in Vercel **before** deploy so production bundles contain the correct URL and anon key. Session persistence uses **browser storage** (`@supabase/supabase-js` defaults).
+
+---
+
+## MySQL vs Supabase Postgres
+
+Primary app data: **MySQL/TiDB** (`DATABASE_URL`, Drizzle). Supabase **Postgres** tables are separate; hybrid auth writes to both when configured.
 
 ## Scripts
 
 | Command | Purpose |
 |--------|---------|
-| `pnpm run dev` | Dev server (Unix-style env in script; on Windows use `tsx` as in Local run) |
-| `pnpm run build` | Production: Vite + bundle Express to `dist/` |
-| `pnpm run build:vercel` | Static client only → `dist/public` |
-| `pnpm run check` | Typecheck |
-| `node scripts/smoke-check.mjs` | Quick local checks (needs `.env` + running server) |
+| `pnpm run dev` / `npm run dev` | Express + Vite dev |
+| `pnpm run build` / `npm run build` | Vite + bundle Express → `dist/` |
+| `pnpm run build:vercel` | Static SPA → `dist/public` |
+| `pnpm run check` / `npm run check` | Typecheck |
+| `node scripts/smoke-check.mjs` | Local smoke (needs `.env` + running server) |

@@ -118,3 +118,6 @@ temp/
 
 # Manus version file (auto-generated, not part of source)
 client/public/__manus__/version.json
+
+# npm lockfile (this repo uses pnpm; avoid accidental npm lock commits)
+package-lock.json

@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { getLoginUrl } from "@/const";
+import { getAppLoginPath } from "@/const";
 import { toast } from "sonner";
 import {
   Camera, CheckCircle2, X, Calendar,
@@ -348,7 +348,7 @@ export default function FieldView() {
       <div className="min-h-screen flex items-center justify-center" style={{ background: BG }}>
         <div className="text-center space-y-4">
           <p className="font-semibold" style={{ color: WHITE }}>Sign in to access your feed</p>
-          <a href={getLoginUrl()} className="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-white text-sm"
+          <a href={getAppLoginPath()} className="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-white text-sm"
             style={{ background: BLUE }}>Sign In</a>
         </div>
       </div>

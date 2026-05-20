@@ -8,6 +8,8 @@ import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
+import { isSupabaseConfigured } from "@/lib/supabase";
+import { supabaseSignIn, supabaseSignOut, supabaseSignUp } from "@/lib/supabaseAuth";
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const BG = "#02020c";
@@ -341,6 +343,7 @@ export function AuthEntry() {
 // ─────────────────────────────────────────────────────────────────────────────
 export function AuthSignup() {
   const [, navigate] = useLocation();
+  const utils = trpc.useUtils();
   const { data: me } = trpc.customAuth.me.useQuery();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -348,6 +351,7 @@ export function AuthSignup() {
   const [businessName, setBusinessName] = useState("");
   const [industrySlug, setIndustrySlug] = useState("");
   const [agreed, setAgreed] = useState(false);
+  const [authBusy, setAuthBusy] = useState(false);
 
   // Read ?plan= from URL so we can route correctly after signup
   const planParam = new URLSearchParams(window.location.search).get("plan") ?? "";
@@ -364,7 +368,9 @@ export function AuthSignup() {
   }, [me, navigate]);
 
   const signup = trpc.customAuth.signup.useMutation({
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
+      await utils.auth.me.invalidate();
+      await utils.customAuth.me.invalidate();
       navigate(getPostSignupRoute(data.welcomeCompleted));
     },
     onError: (err) => {
@@ -372,7 +378,7 @@ export function AuthSignup() {
     },
   });
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!name || !email || !password) {
       toast.error("Please fill in all required fields");
       return;
@@ -385,7 +391,37 @@ export function AuthSignup() {
       toast.error("Please agree to the terms to continue");
       return;
     }
-    signup.mutate({ name, email, password, businessName, industrySlug, agreedToTerms: agreed });
+
+    const emailTrim = email.trim();
+    const nameTrim = name.trim();
+
+    setAuthBusy(true);
+    try {
+      if (isSupabaseConfigured()) {
+        const sb = await supabaseSignUp(emailTrim, password, {
+          data: { full_name: nameTrim },
+        });
+        if (sb.error) {
+          toast.error(sb.error.message);
+          return;
+        }
+      }
+
+      await signup.mutateAsync({
+        name: nameTrim,
+        email: emailTrim,
+        password,
+        businessName: businessName.trim() || undefined,
+        industrySlug: industrySlug.trim() || undefined,
+        agreedToTerms: agreed,
+      });
+    } catch {
+      if (isSupabaseConfigured()) {
+        await supabaseSignOut().catch(() => {});
+      }
+    } finally {
+      setAuthBusy(false);
+    }
   };
 
   return (
@@ -474,7 +510,7 @@ export function AuthSignup() {
         </span>
       </label>
 
-      <GoldButton onClick={handleSubmit} loading={signup.isPending}>
+      <GoldButton onClick={() => void handleSubmit()} loading={authBusy || signup.isPending}>
         Create Account
       </GoldButton>
 
@@ -493,17 +529,21 @@ export function AuthSignup() {
 // ─────────────────────────────────────────────────────────────────────────────
 export function AuthLogin() {
   const [, navigate] = useLocation();
+  const utils = trpc.useUtils();
   const { data: me } = trpc.customAuth.me.useQuery();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(true);
+  const [authBusy, setAuthBusy] = useState(false);
 
   useEffect(() => {
     if (me) navigate(me.welcomeCompleted ? "/command" : "/welcome");
   }, [me, navigate]);
 
   const login = trpc.customAuth.login.useMutation({
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
+      await utils.auth.me.invalidate();
+      await utils.customAuth.me.invalidate();
       navigate(data.welcomeCompleted ? "/command" : "/welcome");
     },
     onError: (err) => {
@@ -511,12 +551,27 @@ export function AuthLogin() {
     },
   });
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!email || !password) {
       toast.error("Please enter your email and password");
       return;
     }
-    login.mutate({ email, password });
+
+    const emailTrim = email.trim();
+    setAuthBusy(true);
+    try {
+      if (isSupabaseConfigured()) {
+        await supabaseSignIn(emailTrim, password);
+      }
+
+      await login.mutateAsync({ email: emailTrim, password });
+    } catch {
+      if (isSupabaseConfigured()) {
+        await supabaseSignOut().catch(() => {});
+      }
+    } finally {
+      setAuthBusy(false);
+    }
   };
 
   // suppress unused warning — remember me is stored client-side only for now
@@ -567,7 +622,7 @@ export function AuthLogin() {
         </Link>
       </div>
 
-      <GoldButton onClick={handleSubmit} loading={login.isPending}>
+      <GoldButton onClick={() => void handleSubmit()} loading={authBusy || login.isPending}>
         Log In
       </GoldButton>
 
@@ -779,8 +834,14 @@ const WELCOME_STEPS = [
 
 export function AuthWelcome() {
   const [, navigate] = useLocation();
+  const utils = trpc.useUtils();
   const { data: me } = trpc.customAuth.me.useQuery();
-  const completeWelcome = trpc.customAuth.completeWelcome.useMutation();
+  const completeWelcome = trpc.customAuth.completeWelcome.useMutation({
+    onSuccess: () => {
+      void utils.auth.me.invalidate();
+      void utils.customAuth.me.invalidate();
+    },
+  });
   const [completed, setCompleted] = useState<number[]>([]);
 
   const handleStepClick = (idx: number, href: string) => {

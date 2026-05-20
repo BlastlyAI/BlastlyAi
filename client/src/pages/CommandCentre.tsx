@@ -14,7 +14,7 @@ import { Link, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { getLoginUrl } from "@/const";
+import { getAppLoginPath } from "@/const";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import {
@@ -196,7 +196,7 @@ export default function CommandCentre() {
 
   // Auth gate — redirect immediately to login, no intermediate screen
   if (!isAuthenticated) {
-    window.location.href = getLoginUrl("/dashboard/home");
+    window.location.href = getAppLoginPath("/command");
     return null;
   }
 
