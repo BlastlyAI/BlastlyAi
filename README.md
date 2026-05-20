@@ -64,7 +64,7 @@ Add every **`VITE_*`** you use from local `.env` (Production + Preview as needed
 |----------|---------|
 | `VITE_API_ORIGIN` | `https://api.yourdomain.com` (no trailing slash) |
 
-Without `VITE_API_ORIGIN`, the browser calls **`/api/trpc`** on the Vercel hostname — that only works if you **also** host the Express API on the same domain or add rewrites/proxy.
+In **production**, if `VITE_API_ORIGIN` is unset, the SPA does **not** call same-origin `/api/trpc` (which would return HTML from the Vercel SPA rewrite). Instead it uses a **built-in offline tRPC layer**: the marketing site and auth screens load, **Supabase** sign-in still works when configured, and dashboard actions that need MySQL/Express show a clear “API not configured” error instead of JSON parse failures. For full app behaviour, set `VITE_API_ORIGIN` to the public URL of your Express server (which must expose `/api/trpc`).
 
 ### Build notes
 

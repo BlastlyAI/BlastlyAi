@@ -2,6 +2,7 @@ import { getAppLoginPath } from "@/const";
 import { trpc } from "@/lib/trpc";
 import { supabaseSignOut } from "@/lib/supabaseAuth";
 import { isSupabaseConfigured } from "@/lib/supabase";
+import { isStaticApiTrpcError } from "@/lib/trpcOfflineLink";
 import { TRPCClientError } from "@trpc/client";
 import { useCallback, useEffect, useMemo } from "react";
 
@@ -33,6 +34,9 @@ export function useAuth(options?: UseAuthOptions) {
       }
       await logoutMutation.mutateAsync();
     } catch (error: unknown) {
+      if (isStaticApiTrpcError(error)) {
+        return;
+      }
       if (
         error instanceof TRPCClientError &&
         error.data?.code === "UNAUTHORIZED"

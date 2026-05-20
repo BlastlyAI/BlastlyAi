@@ -20,3 +20,13 @@ export function apiUrl(path: string): string {
 export function getPublicApiBaseUrl(): string {
   return getApiOrigin() || (typeof window !== "undefined" ? window.location.origin : "");
 }
+
+/**
+ * Vercel static build: no `VITE_API_ORIGIN` means the browser calls same-origin
+ * `/api/trpc`, which is rewritten to `index.html` — not a real API.
+ * In that case the client uses an offline tRPC link instead of HTTP.
+ */
+export function isStaticProductionWithoutApi(): boolean {
+  if (!import.meta.env.PROD) return false;
+  return getApiOrigin() === "";
+}

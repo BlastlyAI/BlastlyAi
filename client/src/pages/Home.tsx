@@ -1723,7 +1723,10 @@ function HeroThreePanels({ loginUrl, isAuthenticated }: { loginUrl: string; isAu
 // ── Main page ──────────────────────────────────────────────────────────────
 export default function Home() {
   const loginUrl = "/signup";
-  const { data: me, isLoading } = trpc.auth.me.useQuery();
+  const { data: me, isLoading, isError } = trpc.auth.me.useQuery(undefined, {
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
   const isAuthenticated = !!me;
   const [mobileOpen, setMobileOpen] = useState(false);
   const [videoModal, setVideoModal] = useState<null | "30sec" | "60sec">(null);
@@ -1740,7 +1743,7 @@ export default function Home() {
     }
   }, []);
 
-  if (isLoading) {
+  if (isLoading && !isError) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: "#02020c" }}>
         <div className="flex flex-col items-center gap-4">
