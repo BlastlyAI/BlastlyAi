@@ -1,6 +1,6 @@
-import { getSupabaseBrowserClient } from "./supabase";
+import { requireSupabaseBrowserClient } from "./supabase";
 import type { AppUser } from "@/types/appUser";
-import type { User as SupabaseAuthUser } from "@supabase/supabase-js";
+import type { SupabaseClient, User as SupabaseAuthUser } from "@supabase/supabase-js";
 
 export type UserProfileRow = {
   id: string;
@@ -12,6 +12,10 @@ export type UserProfileRow = {
   created_at: string;
   updated_at: string;
 };
+
+function resolveClient(client?: SupabaseClient): SupabaseClient {
+  return client ?? requireSupabaseBrowserClient();
+}
 
 function mapProfile(authUser: SupabaseAuthUser, row: UserProfileRow | null): AppUser {
   const meta = authUser.user_metadata ?? {};
@@ -33,16 +37,16 @@ function mapProfile(authUser: SupabaseAuthUser, row: UserProfileRow | null): App
   };
 }
 
-/** Upsert public.users after signUp (trigger may also insert; this fills optional fields). */
 export async function upsertUserProfile(
   authUser: SupabaseAuthUser,
   fields?: {
     displayName?: string;
     businessName?: string;
     industry?: string;
-  }
+  },
+  client?: SupabaseClient
 ): Promise<AppUser> {
-  const supabase = getSupabaseBrowserClient();
+  const supabase = resolveClient(client);
   const payload = {
     id: authUser.id,
     email: authUser.email,
@@ -62,8 +66,11 @@ export async function upsertUserProfile(
   return mapProfile(authUser, data as UserProfileRow);
 }
 
-export async function fetchUserProfile(authUser: SupabaseAuthUser): Promise<AppUser> {
-  const supabase = getSupabaseBrowserClient();
+export async function fetchUserProfile(
+  authUser: SupabaseAuthUser,
+  client?: SupabaseClient
+): Promise<AppUser> {
+  const supabase = resolveClient(client);
   const { data, error } = await supabase
     .from("users")
     .select("*")
@@ -73,14 +80,14 @@ export async function fetchUserProfile(authUser: SupabaseAuthUser): Promise<AppU
   if (error) throw error;
 
   if (!data) {
-    return upsertUserProfile(authUser);
+    return upsertUserProfile(authUser, undefined, supabase);
   }
 
   return mapProfile(authUser, data as UserProfileRow);
 }
 
-export async function completeWelcome(userId: string): Promise<void> {
-  const supabase = getSupabaseBrowserClient();
+export async function completeWelcome(userId: string, client?: SupabaseClient): Promise<void> {
+  const supabase = resolveClient(client);
   const { error } = await supabase
     .from("users")
     .update({ welcome_completed: true, updated_at: new Date().toISOString() })
@@ -90,9 +97,10 @@ export async function completeWelcome(userId: string): Promise<void> {
 
 export async function updateUserProfileFields(
   userId: string,
-  fields: Partial<Pick<UserProfileRow, "display_name" | "business_name" | "industry">>
+  fields: Partial<Pick<UserProfileRow, "display_name" | "business_name" | "industry">>,
+  client?: SupabaseClient
 ): Promise<void> {
-  const supabase = getSupabaseBrowserClient();
+  const supabase = resolveClient(client);
   const { error } = await supabase
     .from("users")
     .update({ ...fields, updated_at: new Date().toISOString() })

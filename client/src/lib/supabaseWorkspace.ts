@@ -1,4 +1,4 @@
-import { getSupabaseBrowserClient } from "./supabase";
+import { requireSupabaseBrowserClient } from "./supabase";
 import { uuidToLegacyId } from "@/types/appUser";
 
 export type WorkspaceRow = {
@@ -34,7 +34,7 @@ function mapWorkspace(row: WorkspaceRow): AppWorkspace {
 }
 
 export async function listWorkspacesForUser(userId: string): Promise<AppWorkspace[]> {
-  const supabase = getSupabaseBrowserClient();
+  const supabase = requireSupabaseBrowserClient();
   const { data, error } = await supabase
     .from("workspaces")
     .select("*")
@@ -46,7 +46,7 @@ export async function listWorkspacesForUser(userId: string): Promise<AppWorkspac
 }
 
 export async function createWorkspace(userId: string, name: string): Promise<AppWorkspace> {
-  const supabase = getSupabaseBrowserClient();
+  const supabase = requireSupabaseBrowserClient();
   const slug =
     name
       .toLowerCase()

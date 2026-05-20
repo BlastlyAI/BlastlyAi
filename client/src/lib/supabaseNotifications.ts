@@ -1,4 +1,4 @@
-import { getSupabaseBrowserClient } from "./supabase";
+import { requireSupabaseBrowserClient } from "./supabase";
 
 export type NotificationRow = {
   id: string;
@@ -10,7 +10,7 @@ export type NotificationRow = {
 };
 
 export async function fetchUnreadNotificationCount(userId: string): Promise<number> {
-  const supabase = getSupabaseBrowserClient();
+  const supabase = requireSupabaseBrowserClient();
   const { count, error } = await supabase
     .from("notifications")
     .select("*", { count: "exact", head: true })
@@ -22,7 +22,7 @@ export async function fetchUnreadNotificationCount(userId: string): Promise<numb
 }
 
 export async function listNotifications(userId: string, limit = 50): Promise<NotificationRow[]> {
-  const supabase = getSupabaseBrowserClient();
+  const supabase = requireSupabaseBrowserClient();
   const { data, error } = await supabase
     .from("notifications")
     .select("*")
@@ -35,7 +35,7 @@ export async function listNotifications(userId: string, limit = 50): Promise<Not
 }
 
 export async function markNotificationRead(id: string): Promise<void> {
-  const supabase = getSupabaseBrowserClient();
+  const supabase = requireSupabaseBrowserClient();
   const { error } = await supabase
     .from("notifications")
     .update({ read_at: new Date().toISOString() })

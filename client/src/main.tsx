@@ -1,3 +1,4 @@
+import { logSupabaseEnvDiagnostics } from "@/lib/supabaseEnv";
 import { trpc } from "@/lib/trpc";
 import { apiUrl, getApiOrigin } from "@/lib/apiOrigin";
 import { createStubTrpcLink } from "@/lib/trpcStubLink";
@@ -8,6 +9,8 @@ import superjson from "superjson";
 import App from "./App";
 import { SupabaseAuthProvider } from "./contexts/SupabaseAuthContext";
 import "./index.css";
+
+logSupabaseEnvDiagnostics();
 
 const hasExternalApi = Boolean(getApiOrigin());
 

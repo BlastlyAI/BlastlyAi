@@ -21,11 +21,19 @@ For full-stack local dev (optional Express + MySQL), use `pnpm run dev`.
 
 | Variable | Required | Notes |
 |----------|----------|--------|
-| `VITE_SUPABASE_URL` | Yes | e.g. `https://<ref>.supabase.co` |
-| `VITE_SUPABASE_ANON_KEY` | Yes | Publishable / anon key only |
-| `VITE_API_ORIGIN` | No | Only if you host the legacy Express API separately |
+| `VITE_SUPABASE_URL` | **Yes** | Must be set **before** `vite build` on Vercel |
+| `VITE_SUPABASE_ANON_KEY` | **Yes** | Anon / publishable key only |
+| `VITE_API_ORIGIN` | No | Legacy Express API only |
 
-Build command: `pnpm run build:vercel` → output `dist/public`.
+**Vite inlines `import.meta.env.VITE_*` at build time.** After adding or changing env vars in Vercel, **redeploy** (new build). Updating env without redeploying leaves the old bundle unchanged.
+
+1. Vercel → **Settings → Environment Variables** → add both vars for **Production** and **Preview**
+2. **Deployments → Redeploy** latest `main` (disable build cache if the last build lacked these vars)
+3. Open the site → browser console should log `SUPABASE URL:` and `SUPABASE KEY EXISTS: true`
+
+Build: `node scripts/verify-vite-env.mjs && vite build` → `dist/public`. On Vercel, missing vars **fail the build** with a clear message.
+
+If a build shipped without vars, users see a **configuration screen** (not a black screen) until you redeploy with env set.
 
 ### Auth architecture
 
