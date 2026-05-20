@@ -10,6 +10,7 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { supabaseSignIn, supabaseSignOut, supabaseSignUp } from "@/lib/supabaseAuth";
+import { isStaticApiTrpcError } from "@/lib/trpcOfflineLink";
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const BG = "#02020c";
@@ -374,6 +375,7 @@ export function AuthSignup() {
       navigate(getPostSignupRoute(data.welcomeCompleted));
     },
     onError: (err) => {
+      if (isStaticApiTrpcError(err) && isSupabaseConfigured()) return;
       toast.error(err.message);
     },
   });
@@ -415,7 +417,15 @@ export function AuthSignup() {
         industrySlug: industrySlug.trim() || undefined,
         agreedToTerms: agreed,
       });
-    } catch {
+    } catch (e) {
+      if (isStaticApiTrpcError(e) && isSupabaseConfigured()) {
+        toast.success(
+          "Supabase account created. Full Blastly sync needs the API server (set VITE_API_ORIGIN on the frontend host).",
+          { duration: 8000 },
+        );
+        navigate("/");
+        return;
+      }
       if (isSupabaseConfigured()) {
         await supabaseSignOut().catch(() => {});
       }
@@ -547,6 +557,7 @@ export function AuthLogin() {
       navigate(data.welcomeCompleted ? "/command" : "/welcome");
     },
     onError: (err) => {
+      if (isStaticApiTrpcError(err) && isSupabaseConfigured()) return;
       toast.error(err.message);
     },
   });
@@ -565,7 +576,15 @@ export function AuthLogin() {
       }
 
       await login.mutateAsync({ email: emailTrim, password });
-    } catch {
+    } catch (e) {
+      if (isStaticApiTrpcError(e) && isSupabaseConfigured()) {
+        toast.success(
+          "Signed in with Supabase. Dashboard features need the API server (set VITE_API_ORIGIN).",
+          { duration: 8000 },
+        );
+        navigate("/");
+        return;
+      }
       if (isSupabaseConfigured()) {
         await supabaseSignOut().catch(() => {});
       }
