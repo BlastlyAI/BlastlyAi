@@ -1,0 +1,1 @@
+ALTER TABLE `workspaces` MODIFY COLUMN `planTier` enum('free','fix_my_brand','managed_social','everything') NOT NULL DEFAULT 'free';

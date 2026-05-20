@@ -1,0 +1,12 @@
+Command page findings:
+- /command loads CommandCentreBI page - shows a daily schedule view with appointments, invoices
+- It has a "Dashboard" button in top-right corner (element 4) which likely goes to the coloured boxes page
+- The /command page itself is a standalone page (not in DashboardLayout sidebar)
+- /dashboard/home loads CommandCentre (the client home page inside DashboardLayout)
+
+User wants:
+- Command Centre button on homepage nav should go to LOGIN for non-auth users
+- After login, go to /dashboard/home (the sidebar dashboard)
+- The /command page (CommandCentreBI) is the standalone daily view - this has a "Dashboard" button that probably goes to the coloured boxes
+
+Need to check: what does the "Dashboard" button on /command go to?

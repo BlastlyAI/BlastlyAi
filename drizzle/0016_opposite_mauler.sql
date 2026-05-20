@@ -1,0 +1,1 @@
+ALTER TABLE `auditReports` ADD `geographicReach` varchar(32);

@@ -1,0 +1,39 @@
+{
+  "name": "Blastly — Social Media on Autopilot",
+  "short_name": "Blastly",
+  "description": "Snap a photo, say what happened, and Blastly posts it everywhere. Social media in 20 seconds.",
+  "start_url": "/dashboard/quick-capture",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0A0E1C",
+  "theme_color": "#0A0E1C",
+  "categories": ["business", "social", "productivity"],
+  "icons": [
+    {
+      "src": "/manus-storage/blastly-icon-192_fedf2a5d.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/manus-storage/blastly-icon-512_8147ad19.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Quick Post",
+      "short_name": "Post",
+      "description": "Snap a photo and post in 20 seconds",
+      "url": "/dashboard/quick-capture",
+      "icons": [
+        {
+          "src": "/manus-storage/blastly-icon-192_fedf2a5d.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ]
+}

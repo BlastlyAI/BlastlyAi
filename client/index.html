@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+    <title>Blastly — The AI Marketing Platform</title>
+    <meta name="description" content="Blastly — The AI marketing platform that creates, schedules, and grows your social media on autopilot. Try it free at blastly.ai" />
+
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#0A0E1C" />
+
+    <!-- iOS PWA support -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Blastly" />
+    <link rel="apple-touch-icon" href="/manus-storage/blastly-apple-touch-icon_c2aa41ed.png" />
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/manus-storage/blastly-favicon-32_17e2462b.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/manus-storage/blastly-icon-192_fedf2a5d.png" />
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Bebas+Neue&family=Crimson+Pro:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+    <script
+      defer
+      src="%VITE_ANALYTICS_ENDPOINT%/umami"
+      data-website-id="%VITE_ANALYTICS_WEBSITE_ID%"></script>
+    <!-- Register Service Worker -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js').catch(() => {});
+        });
+      }
+    </script>
+  </body>
+</html>

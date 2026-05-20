@@ -1,0 +1,2 @@
+ALTER TABLE `workspace_preferences` ADD `ageGroup` enum('children','teens','adults','seniors','all_ages') DEFAULT 'all_ages';--> statement-breakpoint
+ALTER TABLE `workspace_preferences` ADD `businessSector` enum('retail','hospitality','health','beauty','trades','professional_services','food_beverage','education','other') DEFAULT 'other';

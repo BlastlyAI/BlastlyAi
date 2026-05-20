@@ -1,0 +1,20 @@
+CREATE TABLE `seo_scans` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`userId` int NOT NULL,
+	`url` varchar(2048) NOT NULL,
+	`score` int NOT NULL DEFAULT 0,
+	`title` varchar(512),
+	`metaDescription` text,
+	`h1Tags` json,
+	`keywords` json,
+	`pageSpeedScore` int,
+	`httpsEnabled` boolean DEFAULT false,
+	`wordCount` int,
+	`imagesWithoutAlt` int,
+	`internalLinks` int,
+	`externalLinks` int,
+	`recommendations` json,
+	`rawHtml` text,
+	`createdAt` timestamp NOT NULL DEFAULT (now()),
+	CONSTRAINT `seo_scans_id` PRIMARY KEY(`id`)
+);
