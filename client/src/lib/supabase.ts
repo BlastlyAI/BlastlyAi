@@ -2,7 +2,6 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 let browserClient: SupabaseClient | null = null;
 
-/** True when both Vite env vars are set (safe to call getSupabaseBrowserClient). */
 export function isSupabaseConfigured(): boolean {
   const url = import.meta.env.VITE_SUPABASE_URL;
   const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -11,12 +10,12 @@ export function isSupabaseConfigured(): boolean {
 
 /**
  * Browser Supabase client (publishable key only).
- * Session is persisted in localStorage by @supabase/supabase-js.
+ * Required for Vercel deploy — set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.
  */
 export function getSupabaseBrowserClient(): SupabaseClient {
   if (!isSupabaseConfigured()) {
     throw new Error(
-      "Supabase is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env (never commit secrets)."
+      "Supabase is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in Vercel / .env."
     );
   }
   if (!browserClient) {
@@ -33,10 +32,4 @@ export function getSupabaseBrowserClient(): SupabaseClient {
     );
   }
   return browserClient;
-}
-
-/** Returns client when configured; otherwise null (no throw — for optional hybrid UI). */
-export function getSupabaseBrowserClientOrNull(): SupabaseClient | null {
-  if (!isSupabaseConfigured()) return null;
-  return getSupabaseBrowserClient();
 }

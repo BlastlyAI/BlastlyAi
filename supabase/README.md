@@ -1,25 +1,23 @@
-# Supabase (Postgres) — hybrid with existing MySQL
+# Supabase (Blastly Vercel deploy)
 
-This folder holds **SQL you run once** in the Supabase dashboard so tables appear under **Table Editor**.
+Run these SQL files **in order** in the Supabase SQL Editor:
 
-The Express + Drizzle + **MySQL/TiDB** backend is unchanged; that remains the source of truth for the current app until you wire features to Supabase.
+1. `migrations/00000000000000_initial_public_tables.sql` — `users`, `posts`, `notifications`, RLS, auth trigger
+2. `migrations/00000000000001_workspaces_and_profile_fields.sql` — profile columns, `workspaces`, default workspace trigger
 
-## Apply schema (required for `public.users` on signup)
+## Auth
 
-The app calls **Supabase Auth `signUp` first**, then your existing **MySQL `customAuth.signup`**.  
-The trigger in this migration inserts **`public.users`** when a row is added to **`auth.users`**.
+- Sign up creates a row in **Authentication → Users** and **public.users** (via trigger).
+- The client also upserts optional fields (`business_name`, `industry`, `display_name`) after signup.
+- Password reset uses Supabase email links → `/reset-password` on your Vercel domain (add to Auth redirect URLs).
 
-1. Open [Supabase Dashboard](https://supabase.com/dashboard) → your project → **SQL Editor**.
-2. Paste the full contents of `migrations/00000000000000_initial_public_tables.sql`.
-3. Click **Run**.
+## Tables
 
-You should see **`public.users`**, **`public.posts`**, **`public.notifications`** in **Table Editor** (plus `auth.users` managed by Supabase Auth).
+| Table | Purpose |
+|-------|---------|
+| `public.users` | Profile per auth user |
+| `public.workspaces` | Default workspace per user |
+| `public.posts` | User-owned posts (RLS) |
+| `public.notifications` | In-app notifications (RLS) |
 
-## Auth + `public.users`
-
-The migration creates `public.users` keyed to `auth.users` and a trigger so a row is inserted when someone signs up via Supabase Auth.
-
-## Keys
-
-- **Frontend / Vercel:** `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY` (publishable key only).
-- **Server secrets:** use Supabase **service_role** only in backend env (not added to this repo by default).
+MySQL/TiDB in `DATABASE_URL` is **optional** and only used by the legacy Express server.

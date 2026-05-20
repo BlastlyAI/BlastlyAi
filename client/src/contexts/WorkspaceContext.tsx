@@ -1,16 +1,13 @@
-import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
-import { trpc } from "@/lib/trpc";
+import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
+import {
+  ensureDefaultWorkspace,
+  listWorkspacesForUser,
+  type AppWorkspace,
+} from "@/lib/supabaseWorkspace";
 
-type Workspace = {
-  id: number;
-  name: string;
-  slug: string;
-  logoUrl: string | null;
-  ownerId: number;
-  createdAt: Date;
-  updatedAt: Date;
-  // Brand identity fields
+export type Workspace = AppWorkspace & {
+  logoUrl?: string | null;
   website?: string | null;
   industry?: string | null;
   description?: string | null;
@@ -18,7 +15,6 @@ type Workspace = {
   secondaryColor?: string | null;
   toneOfVoice?: string | null;
   targetAudience?: string | null;
-  // Extended profile fields (pre-filled from audit)
   tagline?: string | null;
   phone?: string | null;
   address?: string | null;
@@ -27,7 +23,6 @@ type Workspace = {
   locationCity?: string | null;
   locationState?: string | null;
   locationCountry?: string | null;
-  // Subscription / billing
   planTier?: string | null;
   subscriptionStatus?: string | null;
   trialEndsAt?: Date | null;
@@ -38,32 +33,60 @@ type WorkspaceContextType = {
   currentWorkspace: Workspace | null;
   setCurrentWorkspace: (ws: Workspace) => void;
   isLoading: boolean;
-  refetch: () => void;
+  refetch: () => Promise<void>;
 };
 
 const WorkspaceContext = createContext<WorkspaceContextType>({
-  workspaces: [], currentWorkspace: null, setCurrentWorkspace: () => {}, isLoading: true, refetch: () => {},
+  workspaces: [],
+  currentWorkspace: null,
+  setCurrentWorkspace: () => {},
+  isLoading: true,
+  refetch: async () => {},
 });
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
-  const { isAuthenticated } = useAuth();
+  const { user, isAuthenticated } = useAuth();
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [currentWorkspace, setCurrentWorkspaceState] = useState<Workspace | null>(null);
-  const createWorkspace = trpc.workspace.create.useMutation();
+  const [isLoading, setIsLoading] = useState(true);
 
-  const { data: workspaces = [], isLoading, refetch } = trpc.workspace.list.useQuery(undefined, {
-    enabled: isAuthenticated,
-  });
+  const refetch = useCallback(async () => {
+    if (!user) {
+      setWorkspaces([]);
+      setCurrentWorkspaceState(null);
+      setIsLoading(false);
+      return;
+    }
+    setIsLoading(true);
+    try {
+      let list = await listWorkspacesForUser(user.id);
+      if (list.length === 0) {
+        list = await ensureDefaultWorkspace(user.id, user.businessName ?? "My Workspace");
+      }
+      const mapped: Workspace[] = list.map((w) => ({
+        ...w,
+        industry: user.industry,
+      }));
+      setWorkspaces(mapped);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [user]);
 
   useEffect(() => {
-    if (!isLoading && isAuthenticated && workspaces.length === 0 && !createWorkspace.isPending) {
-      createWorkspace.mutate({ name: "My Workspace" }, { onSuccess: () => refetch() });
+    if (!isAuthenticated || !user) {
+      setWorkspaces([]);
+      setCurrentWorkspaceState(null);
+      setIsLoading(false);
+      return;
     }
-  }, [isLoading, isAuthenticated, workspaces.length]);
+    void refetch();
+  }, [isAuthenticated, user?.id, refetch]);
 
   useEffect(() => {
     if (workspaces.length > 0 && !currentWorkspace) {
       const saved = localStorage.getItem("blastly_workspace_id");
-      const found = saved ? workspaces.find((w) => w.id === Number(saved)) : null;
+      const found = saved ? workspaces.find((w) => String(w.id) === saved) : null;
       setCurrentWorkspaceState(found ?? workspaces[0]);
     }
   }, [workspaces, currentWorkspace]);
@@ -74,7 +97,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <WorkspaceContext.Provider value={{ workspaces, currentWorkspace, setCurrentWorkspace, isLoading, refetch }}>
+    <WorkspaceContext.Provider
+      value={{ workspaces, currentWorkspace, setCurrentWorkspace, isLoading, refetch }}
+    >
       {children}
     </WorkspaceContext.Provider>
   );

@@ -1,7 +1,10 @@
 import { useAuth } from "@/_core/hooks/useAuth";
-import { useWorkspace } from "@/contexts/WorkspaceContext";
+import { useWorkspace, type Workspace } from "@/contexts/WorkspaceContext";
+import type { AppUser } from "@/types/appUser";
+import { fetchUnreadNotificationCount } from "@/lib/supabaseNotifications";
 import { trpc } from "@/lib/trpc";
 import { getAppLoginPath } from "@/const";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -156,11 +159,11 @@ function SidebarContent({
 }: {
   onClose?: () => void;
   location: string;
-  user: Record<string, unknown>;
-  logout: () => void;
-  workspaces: Array<{ id: number; name: string; slug: string; logoUrl: string | null; ownerId: number; createdAt: Date; updatedAt: Date; [key: string]: unknown }>;
-  currentWorkspace: { id: number; name: string; slug: string; logoUrl: string | null; ownerId: number; createdAt: Date; updatedAt: Date; [key: string]: unknown } | null;
-  setCurrentWorkspace: (ws: { id: number; name: string; slug: string; logoUrl: string | null; ownerId: number; createdAt: Date; updatedAt: Date }) => void;
+  user: AppUser | null;
+  logout: () => void | Promise<void>;
+  workspaces: Workspace[];
+  currentWorkspace: Workspace | null;
+  setCurrentWorkspace: (ws: Workspace) => void;
   unreadCount: number;
 }) {
   const [createOpen, setCreateOpen] = useState(false);
@@ -397,8 +400,8 @@ function SidebarContent({
                 </AvatarFallback>
               </Avatar>
               <div className="flex-1 min-w-0 text-left">
-                <p className="text-xs font-medium truncate" style={{ color: "oklch(0.85 0.012 240)" }}>{(user?.name as string) ?? "User"}</p>
-                <p className="text-[10px] truncate" style={{ color: "oklch(0.45 0.014 240)" }}>{(user?.email as string) ?? ""}</p>
+                <p className="text-xs font-medium truncate" style={{ color: "oklch(0.85 0.012 240)" }}>{user?.name ?? "User"}</p>
+                <p className="text-[10px] truncate" style={{ color: "oklch(0.45 0.014 240)" }}>{user?.email ?? ""}</p>
               </div>
             </button>
           </DropdownMenuTrigger>
@@ -428,9 +431,12 @@ export default function AppLayout({ children, title }: { children: ReactNode; ti
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const wsId = currentWorkspace?.id ?? 0;
 
-  const { data: unreadCount = 0 } = trpc.notifications.unreadCount.useQuery(
-    { workspaceId: wsId }, { enabled: !!wsId, refetchInterval: 30000 }
-  );
+  const { data: unreadCount = 0 } = useQuery({
+    queryKey: ["supabase", "notifications", "unread", user?.id],
+    queryFn: () => fetchUnreadNotificationCount(user!.id),
+    enabled: Boolean(user?.id),
+    refetchInterval: 30_000,
+  });
 
   useEffect(() => { setSidebarOpen(false); }, [location]);
 
@@ -461,10 +467,10 @@ export default function AppLayout({ children, title }: { children: ReactNode; ti
 
   const sidebarProps = {
     location,
-    user: user as Record<string, unknown>,
+    user,
     logout,
-    workspaces: workspaces as Array<{ id: number; name: string; slug: string; logoUrl: string | null; ownerId: number; createdAt: Date; updatedAt: Date; [key: string]: unknown }>,
-    currentWorkspace: currentWorkspace as { id: number; name: string; slug: string; logoUrl: string | null; ownerId: number; createdAt: Date; updatedAt: Date; [key: string]: unknown } | null,
+    workspaces,
+    currentWorkspace,
     setCurrentWorkspace,
     unreadCount: Number(unreadCount),
   };

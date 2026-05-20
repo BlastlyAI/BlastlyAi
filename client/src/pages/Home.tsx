@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { getLoginUrl } from "@/const";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { ArrowRight, Zap, Target, TrendingUp, CheckCircle, Menu, X, Globe, Search, BarChart2, Users, Sun, Moon, Sparkles, Rocket, MapPin, Trophy, Radar, Send } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -1309,8 +1310,7 @@ function CinemaRingSection({ loginUrl }: { loginUrl: string }) {
 // ── Homepage Pricing Section ───────────────────────────────────────────────
 function HomePricingSection({ onWatchSnap, onWatchEverything }: { onWatchSnap?: () => void; onWatchEverything?: () => void }) {
   const [, navigate] = useLocation();
-  const { data: me } = trpc.auth.me.useQuery();
-  const isAuthenticated = !!me;
+  const { user, isAuthenticated } = useAuth();
 
   const snapFeatures = [
     "Connect all social platforms",
@@ -1723,11 +1723,7 @@ function HeroThreePanels({ loginUrl, isAuthenticated }: { loginUrl: string; isAu
 // ── Main page ──────────────────────────────────────────────────────────────
 export default function Home() {
   const loginUrl = "/signup";
-  const { data: me, isLoading, isError } = trpc.auth.me.useQuery(undefined, {
-    retry: false,
-    refetchOnWindowFocus: false,
-  });
-  const isAuthenticated = !!me;
+  const { user, loading, isAuthenticated } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [videoModal, setVideoModal] = useState<null | "30sec" | "60sec">(null);
 
@@ -1743,7 +1739,7 @@ export default function Home() {
     }
   }, []);
 
-  if (isLoading && !isError) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: "#02020c" }}>
         <div className="flex flex-col items-center gap-4">

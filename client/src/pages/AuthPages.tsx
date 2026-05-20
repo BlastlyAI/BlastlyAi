@@ -6,11 +6,17 @@
 
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
-import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import { isSupabaseConfigured } from "@/lib/supabase";
-import { supabaseSignIn, supabaseSignOut, supabaseSignUp } from "@/lib/supabaseAuth";
-import { isStaticApiTrpcError } from "@/lib/trpcOfflineLink";
+import { useAuth } from "@/_core/hooks/useAuth";
+import {
+  supabaseSignIn,
+  supabaseSignOut,
+  supabaseSignUp,
+  supabaseResetPasswordForEmail,
+  supabaseGetSession,
+  supabaseUpdatePassword,
+} from "@/lib/supabaseAuth";
+import { upsertUserProfile, completeWelcome, fetchUserProfile } from "@/lib/supabaseProfile";
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const BG = "#02020c";
@@ -287,11 +293,12 @@ const INDUSTRIES = [
 // ─────────────────────────────────────────────────────────────────────────────
 export function AuthEntry() {
   const [, navigate] = useLocation();
-  const { data: me } = trpc.customAuth.me.useQuery();
+  const { user, loading } = useAuth();
 
   useEffect(() => {
-    if (me) navigate(me.welcomeCompleted ? "/command" : "/welcome");
-  }, [me, navigate]);
+    if (loading || !user) return;
+    navigate(user.welcomeCompleted ? "/command" : "/welcome");
+  }, [user, loading, navigate]);
 
   return (
     <AuthShell>
@@ -344,8 +351,7 @@ export function AuthEntry() {
 // ─────────────────────────────────────────────────────────────────────────────
 export function AuthSignup() {
   const [, navigate] = useLocation();
-  const utils = trpc.useUtils();
-  const { data: me } = trpc.customAuth.me.useQuery();
+  const { user, loading, refresh } = useAuth();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -354,7 +360,6 @@ export function AuthSignup() {
   const [agreed, setAgreed] = useState(false);
   const [authBusy, setAuthBusy] = useState(false);
 
-  // Read ?plan= from URL so we can route correctly after signup
   const planParam = new URLSearchParams(window.location.search).get("plan") ?? "";
   const isPremium = planParam === "everything";
 
@@ -365,20 +370,9 @@ export function AuthSignup() {
   }
 
   useEffect(() => {
-    if (me) navigate(getPostSignupRoute(me.welcomeCompleted));
-  }, [me, navigate]);
-
-  const signup = trpc.customAuth.signup.useMutation({
-    onSuccess: async (data) => {
-      await utils.auth.me.invalidate();
-      await utils.customAuth.me.invalidate();
-      navigate(getPostSignupRoute(data.welcomeCompleted));
-    },
-    onError: (err) => {
-      if (isStaticApiTrpcError(err) && isSupabaseConfigured()) return;
-      toast.error(err.message);
-    },
-  });
+    if (loading || !user) return;
+    navigate(getPostSignupRoute(user.welcomeCompleted));
+  }, [user, loading, navigate]);
 
   const handleSubmit = async () => {
     if (!name || !email || !password) {
@@ -399,36 +393,35 @@ export function AuthSignup() {
 
     setAuthBusy(true);
     try {
-      if (isSupabaseConfigured()) {
-        const sb = await supabaseSignUp(emailTrim, password, {
-          data: { full_name: nameTrim },
-        });
-        if (sb.error) {
-          toast.error(sb.error.message);
-          return;
-        }
-      }
-
-      await signup.mutateAsync({
-        name: nameTrim,
-        email: emailTrim,
-        password,
-        businessName: businessName.trim() || undefined,
-        industrySlug: industrySlug.trim() || undefined,
-        agreedToTerms: agreed,
+      const sb = await supabaseSignUp(emailTrim, password, {
+        data: { full_name: nameTrim },
       });
-    } catch (e) {
-      if (isStaticApiTrpcError(e) && isSupabaseConfigured()) {
-        toast.success(
-          "Supabase account created. Full Blastly sync needs the API server (set VITE_API_ORIGIN on the frontend host).",
-          { duration: 8000 },
-        );
-        navigate("/");
+      if (sb.error) {
+        toast.error(sb.error.message);
         return;
       }
-      if (isSupabaseConfigured()) {
-        await supabaseSignOut().catch(() => {});
+      if (!sb.data.user) {
+        toast.error("Sign up failed — please try again.");
+        return;
       }
+
+      if (!sb.data.session) {
+        toast.success("Check your email to confirm your account, then log in.");
+        navigate("/login");
+        return;
+      }
+
+      await upsertUserProfile(sb.data.user, {
+        displayName: nameTrim,
+        businessName: businessName.trim() || undefined,
+        industry: industrySlug.trim() || undefined,
+      });
+
+      await refresh();
+      navigate(getPostSignupRoute(false));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Sign up failed");
+      await supabaseSignOut().catch(() => {});
     } finally {
       setAuthBusy(false);
     }
@@ -520,7 +513,7 @@ export function AuthSignup() {
         </span>
       </label>
 
-      <GoldButton onClick={() => void handleSubmit()} loading={authBusy || signup.isPending}>
+      <GoldButton onClick={() => void handleSubmit()} loading={authBusy}>
         Create Account
       </GoldButton>
 
@@ -539,28 +532,16 @@ export function AuthSignup() {
 // ─────────────────────────────────────────────────────────────────────────────
 export function AuthLogin() {
   const [, navigate] = useLocation();
-  const utils = trpc.useUtils();
-  const { data: me } = trpc.customAuth.me.useQuery();
+  const { user, loading, refresh } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(true);
   const [authBusy, setAuthBusy] = useState(false);
 
   useEffect(() => {
-    if (me) navigate(me.welcomeCompleted ? "/command" : "/welcome");
-  }, [me, navigate]);
-
-  const login = trpc.customAuth.login.useMutation({
-    onSuccess: async (data) => {
-      await utils.auth.me.invalidate();
-      await utils.customAuth.me.invalidate();
-      navigate(data.welcomeCompleted ? "/command" : "/welcome");
-    },
-    onError: (err) => {
-      if (isStaticApiTrpcError(err) && isSupabaseConfigured()) return;
-      toast.error(err.message);
-    },
-  });
+    if (loading || !user) return;
+    navigate(user.welcomeCompleted ? "/command" : "/welcome");
+  }, [user, loading, navigate]);
 
   const handleSubmit = async () => {
     if (!email || !password) {
@@ -571,29 +552,27 @@ export function AuthLogin() {
     const emailTrim = email.trim();
     setAuthBusy(true);
     try {
-      if (isSupabaseConfigured()) {
-        await supabaseSignIn(emailTrim, password);
-      }
-
-      await login.mutateAsync({ email: emailTrim, password });
-    } catch (e) {
-      if (isStaticApiTrpcError(e) && isSupabaseConfigured()) {
-        toast.success(
-          "Signed in with Supabase. Dashboard features need the API server (set VITE_API_ORIGIN).",
-          { duration: 8000 },
-        );
-        navigate("/");
+      const res = await supabaseSignIn(emailTrim, password);
+      if (res.error) {
+        toast.error(res.error.message);
         return;
       }
-      if (isSupabaseConfigured()) {
-        await supabaseSignOut().catch(() => {});
+      if (res.data.user) {
+        const profile = await fetchUserProfile(res.data.user);
+        await refresh();
+        navigate(profile.welcomeCompleted ? "/command" : "/welcome");
+        return;
       }
+      await refresh();
+      navigate("/command");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Login failed");
+      await supabaseSignOut().catch(() => {});
     } finally {
       setAuthBusy(false);
     }
   };
 
-  // suppress unused warning — remember me is stored client-side only for now
   void remember;
 
   return (
@@ -641,7 +620,7 @@ export function AuthLogin() {
         </Link>
       </div>
 
-      <GoldButton onClick={() => void handleSubmit()} loading={authBusy || login.isPending}>
+      <GoldButton onClick={() => void handleSubmit()} loading={authBusy}>
         Log In
       </GoldButton>
 
@@ -661,20 +640,25 @@ export function AuthLogin() {
 export function AuthForgotPassword() {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
+  const [busy, setBusy] = useState(false);
 
-  const forgotPassword = trpc.customAuth.forgotPassword.useMutation({
-    onSuccess: () => setSent(true),
-    onError: (err) => {
-      toast.error(err.message);
-    },
-  });
-
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!email) {
       toast.error("Please enter your email address");
       return;
     }
-    forgotPassword.mutate({ email, origin: window.location.origin });
+    setBusy(true);
+    try {
+      const redirectTo = `${window.location.origin}/reset-password`;
+      const { error } = await supabaseResetPasswordForEmail(email.trim(), redirectTo);
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+      setSent(true);
+    } finally {
+      setBusy(false);
+    }
   };
 
   if (sent) {
@@ -740,7 +724,7 @@ export function AuthForgotPassword() {
 
       <AuthInput label="Email address" type="email" value={email} onChange={setEmail} autoComplete="email" />
 
-      <GoldButton onClick={handleSubmit} loading={forgotPassword.isPending}>
+      <GoldButton onClick={() => void handleSubmit()} loading={busy}>
         Send Reset Link
       </GoldButton>
 
@@ -758,21 +742,20 @@ export function AuthForgotPassword() {
 // ─────────────────────────────────────────────────────────────────────────────
 export function AuthResetPassword() {
   const [, navigate] = useLocation();
+  const { refresh } = useAuth();
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
-  const token = new URLSearchParams(window.location.search).get("token") ?? "";
+  const [busy, setBusy] = useState(false);
+  const [hasRecoverySession, setHasRecoverySession] = useState<boolean | null>(null);
 
-  const resetPassword = trpc.customAuth.resetPassword.useMutation({
-    onSuccess: () => {
-      toast.success("Password updated — you are now logged in.");
-      navigate("/command");
-    },
-    onError: (err) => {
-      toast.error(err.message);
-    },
-  });
+  useEffect(() => {
+    void (async () => {
+      const session = await supabaseGetSession();
+      setHasRecoverySession(Boolean(session));
+    })();
+  }, []);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (password.length < 8) {
       toast.error("Password must be at least 8 characters");
       return;
@@ -781,18 +764,38 @@ export function AuthResetPassword() {
       toast.error("Passwords do not match");
       return;
     }
-    resetPassword.mutate({ token, newPassword: password });
+    setBusy(true);
+    try {
+      const { error } = await supabaseUpdatePassword(password);
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+      toast.success("Password updated — you are now logged in.");
+      await refresh();
+      navigate("/command");
+    } finally {
+      setBusy(false);
+    }
   };
 
-  if (!token) {
+  if (hasRecoverySession === false) {
     return (
       <AuthShell>
         <p style={{ color: MUTED, textAlign: "center" }}>
-          Invalid reset link.{" "}
+          Invalid or expired reset link.{" "}
           <Link href="/forgot-password">
             <span style={{ color: GOLD, cursor: "pointer" }}>Request a new one</span>
           </Link>
         </p>
+      </AuthShell>
+    );
+  }
+
+  if (hasRecoverySession === null) {
+    return (
+      <AuthShell>
+        <p style={{ color: MUTED, textAlign: "center" }}>Loading…</p>
       </AuthShell>
     );
   }
@@ -817,7 +820,7 @@ export function AuthResetPassword() {
       <AuthInput label="New password" type="password" value={password} onChange={setPassword} autoComplete="new-password" />
       <AuthInput label="Confirm password" type="password" value={confirm} onChange={setConfirm} autoComplete="new-password" />
 
-      <GoldButton onClick={handleSubmit} loading={resetPassword.isPending}>
+      <GoldButton onClick={() => void handleSubmit()} loading={busy}>
         Update Password
       </GoldButton>
     </AuthShell>
@@ -853,25 +856,33 @@ const WELCOME_STEPS = [
 
 export function AuthWelcome() {
   const [, navigate] = useLocation();
-  const utils = trpc.useUtils();
-  const { data: me } = trpc.customAuth.me.useQuery();
-  const completeWelcome = trpc.customAuth.completeWelcome.useMutation({
-    onSuccess: () => {
-      void utils.auth.me.invalidate();
-      void utils.customAuth.me.invalidate();
-    },
-  });
+  const { user, loading, refresh } = useAuth();
   const [completed, setCompleted] = useState<number[]>([]);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!loading && !user) navigate("/login");
+  }, [loading, user, navigate]);
+
+  const markWelcomeComplete = async () => {
+    if (!user || busy) return;
+    setBusy(true);
+    try {
+      await completeWelcome(user.id);
+      await refresh();
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const handleStepClick = (idx: number, href: string) => {
     setCompleted((prev) => (prev.includes(idx) ? prev : [...prev, idx]));
-    completeWelcome.mutate();
+    void markWelcomeComplete();
     navigate(href);
   };
 
   const handleSkip = () => {
-    completeWelcome.mutate();
-    navigate("/command");
+    void markWelcomeComplete().then(() => navigate("/command"));
   };
 
   return (
@@ -888,7 +899,7 @@ export function AuthWelcome() {
           }}
         >
           Welcome to Blastly
-          {me?.name ? <span style={{ color: GOLD }}>, {me.name.split(" ")[0]}</span> : null}
+          {user?.name ? <span style={{ color: GOLD }}>, {user.name.split(" ")[0]}</span> : null}
         </h2>
         <p style={{ fontSize: "13px", color: MUTED, lineHeight: 1.6 }}>
           You're in. Let's get you set up in three quick steps.
