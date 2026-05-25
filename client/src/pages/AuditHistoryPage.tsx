@@ -1,6 +1,6 @@
 import AppLayout from "@/components/AppLayout";
-import { trpc } from "@/lib/trpc";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
+import { useAuditList } from "@/hooks/useAuditList";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -47,12 +47,10 @@ function ScoreBar({ label, value }: { label: string; value: number | null }) {
 export default function AuditHistoryPage() {
   const { currentWorkspace } = useWorkspace();
   const wsId = currentWorkspace?.id ?? 0;
+  const workspaceSupabaseId = currentWorkspace?.supabaseId;
   const [, navigate] = useLocation();
 
-  const { data: audits = [], isLoading } = trpc.audit.listAudits.useQuery(
-    { workspaceId: wsId },
-    { enabled: !!wsId }
-  );
+  const { data: audits = [], isLoading } = useAuditList(workspaceSupabaseId, wsId);
 
   return (
     <AppLayout title="Audit History">

@@ -3,8 +3,9 @@
 
 // ─── Plan Tier enum ────────────────────────────────────────────────────────────
 // "free"       = Snap & Post — free forever, no card required
-// "everything" = Everything — AU$75/week, 14-day free trial
-export type PlanTier = "free" | "everything";
+// "pro"        = Blastly Pro — AU$75/week (canonical paid tier)
+// "everything" = legacy alias for pro (existing DB rows / Stripe metadata)
+export type PlanTier = "free" | "pro" | "everything";
 
 // ─── Main Plans ────────────────────────────────────────────────────────────────
 export const PLANS = {
@@ -107,9 +108,13 @@ export const EVERYTHING_LIMITS = {
 };
 
 // ─── Feature gate helper ───────────────────────────────────────────────────────
+export function isPaidPlanTier(tier: PlanTier): boolean {
+  return tier === "pro" || tier === "everything";
+}
+
 // Returns true if the workspace's planTier allows the given feature
 export function canAccess(planTier: PlanTier, feature: keyof typeof FREE_LIMITS): boolean {
-  if (planTier === "everything") return EVERYTHING_LIMITS[feature] as boolean;
+  if (isPaidPlanTier(planTier)) return EVERYTHING_LIMITS[feature] as boolean;
   return FREE_LIMITS[feature] as boolean;
 }
 
@@ -118,12 +123,13 @@ export const UPGRADE_PROMPT = {
   headline: "Aria would have caught that.",
   body: "Upgrade to AU$75/week and never miss an enquiry again.",
   cta: "Start My Free Trial",
-  ctaPath: "/pricing",
+  ctaPath: "/upgrade",
 } as const;
 
 // ─── Legacy plan mapping (kept for backward compat with existing DB rows) ──────
 // Old plan tiers in the DB ("fix_my_brand", "managed_social") are treated as "everything"
 export function normalisePlanTier(raw: string | null | undefined): PlanTier {
   if (!raw || raw === "free") return "free";
-  return "everything"; // fix_my_brand, managed_social, everything all map to everything
+  if (raw === "pro") return "pro";
+  return "pro"; // everything, fix_my_brand, managed_social → pro
 }

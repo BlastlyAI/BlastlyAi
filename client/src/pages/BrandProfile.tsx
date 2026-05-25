@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { saveBrandProfileApi } from "@/lib/workspaceApi";
 import { toast } from "sonner";
 import {
   Building2, Globe, Palette, Users, Mic2, MicOff, Upload, Check,
@@ -56,7 +57,6 @@ function ColorSwatch({ color, label, onChange }: { color: string; label: string;
 
 export default function BrandProfile() {
   const { currentWorkspace, refetch } = useWorkspace();
-  const utils = trpc.useUtils();
 
   const [form, setForm] = useState({
     name: "",
@@ -161,22 +161,41 @@ export default function BrandProfile() {
     }
   }, [currentWorkspace]);
 
-  const updateBrandProfile = trpc.workspace.updateBrandProfile.useMutation({
-    onSuccess: () => {
+  async function handleSave() {
+    if (!currentWorkspace?.supabaseId) {
+      toast.error("No workspace selected");
+      return;
+    }
+    setSaving(true);
+    try {
+      await saveBrandProfileApi({
+        workspaceId: currentWorkspace.supabaseId,
+        name: form.name,
+        website: form.website,
+        industry: form.industry,
+        description: form.description,
+        primaryColor: form.primaryColor,
+        secondaryColor: form.secondaryColor,
+        toneOfVoice: form.toneOfVoice,
+        targetAudience: form.targetAudience,
+        tagline: form.tagline,
+        phone: form.phone,
+        address: form.address,
+        googleReviewUrl: form.googleReviewUrl,
+        ...(logoBase64 && logoFileName ? { logoBase64, logoFileName } : {}),
+      });
       setSaved(true);
-      setSaving(false);
       setLogoBase64(null);
       setLogoFileName(null);
       setTimeout(() => setSaved(false), 3000);
-      refetch();
-      utils.workspace.list.invalidate();
+      await refetch();
       toast.success("Brand profile saved!", { description: "Your brand identity has been updated." });
-    },
-    onError: (err) => {
+    } catch (e) {
+      toast.error("Save failed", { description: e instanceof Error ? e.message : "Unknown error" });
+    } finally {
       setSaving(false);
-      toast.error("Save failed", { description: err.message });
-    },
-  });
+    }
+  }
 
   const processFile = useCallback((file: File) => {
     if (file.size > 2 * 1024 * 1024) {
@@ -201,7 +220,6 @@ export default function BrandProfile() {
   function handleLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (file) processFile(file);
-    // Reset input so same file can be re-selected
     e.target.value = "";
   }
 
@@ -216,16 +234,6 @@ export default function BrandProfile() {
     setLogoPreview(null);
     setLogoBase64(null);
     setLogoFileName(null);
-  }
-
-  function handleSave() {
-    if (!currentWorkspace) return;
-    setSaving(true);
-    updateBrandProfile.mutate({
-      id: currentWorkspace.id,
-      ...form,
-      ...(logoBase64 && logoFileName ? { logoBase64, logoFileName } : {}),
-    });
   }
 
   const profileComplete = !!(form.name && form.website && form.description && form.targetAudience);

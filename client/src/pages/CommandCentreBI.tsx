@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { AppointmentDrawer } from "@/components/AppointmentDrawer";
 import ClientContactModal from "@/components/ClientContactModal";
-import { UpgradePrompt } from "@/components/UpgradePrompt";
+import { usePlanAccess } from "@/hooks/usePlanAccess";
+import { useDashboardAudit } from "@/hooks/useDashboardAudit";
+import { useCommandCentrePersonalFeed } from "@/hooks/useCommandCentrePersonalFeed";
 import { trpc } from "@/lib/trpc";
 import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -807,13 +809,13 @@ function Modal({ show, onClose, title, children, isDark }: { show: boolean; onCl
 export default function CommandCentreBI() {
   const { user, loading: authLoading } = useAuth();
   const { currentWorkspace } = useWorkspace();
+  const { assistantName, billing } = usePlanAccess();
+  const dashboard = useDashboardAudit();
   const { theme, toggleTheme } = useTheme();
   const isDark = theme === "dark";
   const T = makeTokens(isDark);
   const [, navigate] = useLocation();
   const wsId = currentWorkspace?.id;
-  const planTier = (currentWorkspace as Record<string, unknown>)?.planTier as string | null | undefined;
-  const isFreePlan = !planTier || planTier === "snap_and_post" || planTier === "free";
 
   const [mobileTab, setMobileTab]         = useState<"feed" | "day">("feed");
   const [showEmail, setShowEmail]         = useState(false);
@@ -857,7 +859,7 @@ export default function CommandCentreBI() {
   }, [feedQuery.data]);
 
   // Convert scheduled posts to FeedItems — MUST be before early returns (hooks rule)
-  const items = feedQuery.data ?? [];
+  const trpcFeedItems = feedQuery.data ?? [];
   const scheduledPostItems: FeedItem[] = useMemo(() => {
     const posts = postsQuery.data ?? [];
     return posts
@@ -887,6 +889,11 @@ export default function CommandCentreBI() {
       });
   }, [postsQuery.data]);
 
+  const { items: personalFeedItems, hasPersonalData, fromAudit } = useCommandCentrePersonalFeed(
+    trpcFeedItems as FeedItem[]
+  );
+  const items = personalFeedItems.length > 0 ? personalFeedItems : trpcFeedItems;
+
   const URGENT_TYPES = ["lead_new","lead_quote","message_dm","message_email","message_sms","booking_request","review_negative","post_approval","appointment_upcoming"];
   const allItems = useMemo(() => [...items, ...scheduledPostItems], [items, scheduledPostItems]);
   const urgentItems    = allItems.filter(i => i.priority <= 2 || URGENT_TYPES.includes(i.itemType));
@@ -900,17 +907,23 @@ export default function CommandCentreBI() {
     );
   }
   if (!user) {
-    window.location.replace(getAppLoginPath("/command"));
+    window.location.replace(getAppLoginPath("/command-centre"));
     return null;
   }
 
   const actionCount  = urgentItems.length;
-  const businessName = currentWorkspace?.name || user?.name || "there";
+  const businessName = dashboard.businessName || currentWorkspace?.name || user?.businessName || user?.name || "there";
   const ws = currentWorkspace as Record<string, unknown>;
-  const tagline = ws?.tagline as string | undefined;
-  const industry = currentWorkspace?.industry;
+  const tagline = (ws?.tagline as string | undefined) || dashboard.aiSummary?.slice(0, 80);
+  const industry = dashboard.industry || currentWorkspace?.industry;
   const locationCity = ws?.locationCity as string | undefined;
-  const subline = tagline || (industry ? `${industry}${locationCity ? ` · ${locationCity}` : ""}` : new Date().toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" }));
+  const assistantLine = billing?.assistantName
+    ? `${billing.assistantName} · ${billing.assistantTone || "Professional"}`
+    : null;
+  const subline =
+    assistantLine ||
+    tagline ||
+    (industry ? `${industry}${locationCity ? ` · ${locationCity}` : ""}` : new Date().toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" }));
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Morning" : hour < 17 ? "Afternoon" : "Evening";
@@ -920,11 +933,6 @@ export default function CommandCentreBI() {
 
   return (
     <div className="flex flex-col h-screen overflow-hidden" style={{ background: T.BG, fontFamily: "Inter, system-ui, sans-serif" }}>
-
-      {/* ── Free plan upgrade banner ── */}
-      {isFreePlan && (
-        <UpgradePrompt variant="banner" />
-      )}
 
       {/* ── Header ── */}
       <div className="flex-shrink-0 flex items-center gap-3 px-4 py-2.5 border-b"
@@ -1010,16 +1018,24 @@ export default function CommandCentreBI() {
                 </div>
               )}
 
-              {!feedQuery.isLoading && items.length === 0 && (
+              {!feedQuery.isLoading && allItems.length === 0 && (
                 <div className="text-center py-8 space-y-2">
                   <p className="text-xl">✅</p>
                   <p className="text-xs font-semibold" style={{ color: T.TEXT }}>All clear — great work!</p>
-                  <button onClick={() => wsId && seedDemo.mutate({ workspaceId: wsId })}
-                    className="text-[11px] px-3 py-1.5 rounded-xl border transition-colors hover:bg-gray-100"
-                    style={{ borderColor: T.BORDER, color: T.MUTED }}>
-                    Load demo items
-                  </button>
+                  {!hasPersonalData && (
+                    <button onClick={() => wsId && seedDemo.mutate({ workspaceId: wsId })}
+                      className="text-[11px] px-3 py-1.5 rounded-xl border transition-colors hover:bg-gray-100"
+                      style={{ borderColor: T.BORDER, color: T.MUTED }}>
+                      Load demo items
+                    </button>
+                  )}
                 </div>
+              )}
+
+              {!feedQuery.isLoading && fromAudit && hasPersonalData && trpcFeedItems.length === 0 && allItems.length > 0 && (
+                <p className="text-[10px] text-center pb-2" style={{ color: T.MUTED }}>
+                  Personalized from your audit{assistantName ? ` · ${assistantName} ready` : ""}
+                </p>
               )}
 
               {urgentItems.map(item => (

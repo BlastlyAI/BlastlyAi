@@ -1,10 +1,13 @@
-import { useState, useEffect, useCallback, useRef } from "react";
-import { trpc } from "@/lib/trpc";
+import { useState, useEffect, useCallback } from "react";
+import { runAuditApi } from "@/lib/auditApi";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { useWorkspace } from "@/contexts/WorkspaceContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
+import AuditAnalyzingScreen from "@/components/premium/AuditAnalyzingScreen";
 import {
   BarChart2, Sparkles, Globe, Loader2,
   ArrowRight, Shield, Zap, TrendingUp, Star, Search,
@@ -19,41 +22,10 @@ const FEATURES = [
   { icon: Star, title: "Competitor Intelligence", desc: "Monitor rivals, spot trends, and auto-generate counter-content" },
 ];
 
-const MARKETING_FACTS = [
-  { stat: "7", label: "touchpoints", detail: "A customer needs to see your brand at least 7 times before they decide to buy. Most small businesses only manage 2." },
-  { stat: "23%", label: "more revenue", detail: "Businesses with consistent branding across all platforms generate up to 23% more revenue than those without." },
-  { stat: "3×", label: "more traffic", detail: "Businesses that post on social media 5 or more times per week get 3× more website traffic than those that post once a week." },
-  { stat: "78%", label: "of buyers", detail: "78% of consumers say a company's social media posts influence their decision to buy. Your feed is your storefront." },
-  { stat: "$5.20", label: "return per $1", detail: "For every $1 spent on social media marketing, businesses earn an average return of $5.20. That's a 420% ROI." },
-  { stat: "54%", label: "research online first", detail: "54% of social media users research products on social platforms before making a purchase. If you're not there, they'll find your competitor." },
-  { stat: "10×", label: "more engagement", detail: "Video content generates 10× more engagement than text or image posts. One short video can outperform a month of static posts." },
-  { stat: "91%", label: "of adults online", detail: "91% of Australian adults are online every day. Your next customer is scrolling right now — the question is whether they'll find you." },
-  { stat: "60%", label: "discover brands", detail: "60% of people discover new products and businesses through Instagram alone. A dormant profile is a missed introduction every single day." },
-  { stat: "4.4 billion", label: "social media users", detail: "There are 4.4 billion active social media users worldwide. Your local customers are among them — and they're looking for businesses like yours." },
-  { stat: "2 hrs 21 min", label: "daily on social", detail: "The average person spends 2 hours and 21 minutes on social media every day. That's your window to be seen, remembered, and chosen." },
-  { stat: "40×", label: "more reach", detail: "Content shared on social media reaches 40× more people than the same content published only on a website. Social is the amplifier." },
-  { stat: "80%", label: "of leads ignored", detail: "80% of sales require at least 5 follow-up touchpoints, yet 44% of salespeople give up after just one. Consistent posting does the follow-up for you." },
-  { stat: "1 in 3", label: "customers complain online", detail: "1 in 3 customers who have a bad experience will post about it online. But businesses that respond publicly retain 70% of those customers." },
-  { stat: "6 seconds", label: "to make an impression", detail: "You have just 6 seconds to make a first impression online. A polished, active social profile is the difference between a click and a scroll-past." },
-  { stat: "16 blogs", label: "per month = 3.5× leads", detail: "Businesses that publish 16 or more blog posts per month generate 3.5× more website traffic and 4.5× more leads than those that blog less." },
-  { stat: "$4/day", label: "is all it takes", detail: "For less than the cost of a coffee a day, Blastly can post daily across all your platforms, write your blogs, and run your ads — automatically." },
-  { stat: "70%", label: "prefer to learn via content", detail: "70% of consumers prefer to learn about a business through articles and social posts rather than traditional advertising. Content is the new cold call." },
-  { stat: "5×", label: "cheaper to retain", detail: "It costs 5× more to attract a new customer than to keep an existing one. Regular social posting keeps your current customers engaged and coming back." },
-  { stat: "30 days", label: "to see real results", detail: "Businesses that post consistently for just 30 days report measurable increases in website visits, enquiries, and brand recognition. It starts faster than you think." },
-];
-
-const ANALYSIS_STEPS = [
-  "Scanning your website…",
-  "Discovering your social media presence…",
-  "Evaluating content quality & consistency…",
-  "Estimating ad performance & cost metrics…",
-  "Benchmarking against industry standards…",
-  "Generating personalised recommendations…",
-  "Preparing your onboarding profile…",
-];
-
 export default function AuditPage() {
   const [, navigate] = useLocation();
+  const { isAuthenticated } = useAuth();
+  const { currentWorkspace } = useWorkspace();
 
   // Read ?url= and ?trial= query params pre-filled from the homepage.
   const searchParams = new URLSearchParams(window.location.search);
@@ -64,240 +36,50 @@ export default function AuditPage() {
   // If a URL was passed from the homepage, start in loading state immediately
   const [isRunning, setIsRunning] = useState(!!prefillUrl);
 
-  // Countdown: starts at 15 and ticks down while audit runs
-  const [countdown, setCountdown] = useState(15);
-  const [stepIndex, setStepIndex] = useState(0);
-  const [factIndex, setFactIndex] = useState(0);
-  const [factVisible, setFactVisible] = useState(true);
-  const factTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const submitAudit = useCallback(
+    (rawUrl: string) => {
+      const trimmed = rawUrl.trim();
+      if (!trimmed) {
+        toast.error("Please enter your website or social media URL");
+        return;
+      }
+      const normalised = trimmed.startsWith("http") ? trimmed : `https://${trimmed}`;
+      setIsRunning(true);
 
-  // Tick the countdown every ~2 seconds while running
-  useEffect(() => {
-    if (!isRunning) return;
-    setCountdown(15);
-    setStepIndex(0);
-    // Randomise starting fact
-    setFactIndex(Math.floor(Math.random() * MARKETING_FACTS.length));
-    setFactVisible(true);
-    const interval = setInterval(() => {
-      setCountdown(prev => (prev > 1 ? prev - 1 : 1));
-      setStepIndex(prev => (prev < ANALYSIS_STEPS.length - 1 ? prev + 1 : prev));
-    }, 2000);
-    return () => clearInterval(interval);
-  }, [isRunning]);
-
-  // Rotate facts every 4 seconds with a fade transition
-  useEffect(() => {
-    if (!isRunning) return;
-    factTimer.current = setInterval(() => {
-      setFactVisible(false);
-      setTimeout(() => {
-        setFactIndex(prev => (prev + 1) % MARKETING_FACTS.length);
-        setFactVisible(true);
-      }, 400);
-    }, 4000);
-    return () => { if (factTimer.current) clearInterval(factTimer.current); };
-  }, [isRunning]);
-
-  const runAudit = trpc.audit.runAudit.useMutation({
-    onSuccess: (data) => {
-      // Always show the full report page first — the report has the "Fix my brand" CTA
-      // that takes customers to onboarding. Never skip the report page.
-      navigate(`/audit/report/${data.shareToken}`);
+      void runAuditApi({
+        businessName: normalised,
+        website: normalised,
+        workspaceId: isAuthenticated ? currentWorkspace?.supabaseId ?? null : null,
+      })
+        .then((data) => {
+          navigate(`/audit/report/${data.shareToken}`);
+        })
+        .catch((err: Error) => {
+          setIsRunning(false);
+          toast.error(err.message);
+        });
     },
-    onError: (err) => {
-      setIsRunning(false);
-      toast.error(err.message);
-    },
-  });
-
-  const submitAudit = useCallback((rawUrl: string) => {
-    const trimmed = rawUrl.trim();
-    if (!trimmed) {
-      toast.error("Please enter your website or social media URL");
-      return;
-    }
-    const normalised = trimmed.startsWith("http") ? trimmed : `https://${trimmed}`;
-    setIsRunning(true);
-    runAudit.mutate({
-      businessName: normalised,
-      website: normalised,
-      industry: undefined,
-      handles: undefined,
-      adSpend: undefined,
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    [navigate, isAuthenticated, currentWorkspace?.supabaseId]
+  );
 
   // Auto-submit when a URL was pre-filled from the homepage
   useEffect(() => {
     if (prefillUrl) {
       submitAudit(prefillUrl);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSubmit = () => submitAudit(url);
 
   // Running / countdown state
   if (isRunning) {
-    // Circumference of the progress ring (r=46)
-    const circumference = 2 * Math.PI * 46; // ≈ 289
-    const progress = ((15 - countdown) / 15) * circumference;
-
-    return (
-      <div
-        className="min-h-screen flex flex-col items-center justify-center p-6"
-        style={{ background: "oklch(0.07 0.015 250)" }}
-      >
-        <div className="text-center max-w-sm w-full">
-
-          {/* Countdown ring */}
-          <div className="relative w-36 h-36 mx-auto mb-10">
-            {/* Track */}
-            <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 100 100">
-              <circle cx="50" cy="50" r="46" fill="none" stroke="oklch(0.18 0.018 248)" strokeWidth="5" />
-              {/* Progress arc */}
-              <circle
-                cx="50" cy="50" r="46" fill="none"
-                stroke="oklch(0.52 0.22 145)" strokeWidth="5"
-                strokeLinecap="round"
-                strokeDasharray={`${progress} ${circumference}`}
-                style={{ transition: "stroke-dasharray 0.8s ease" }}
-              />
-            </svg>
-            {/* Spinning outer ring */}
-            <svg
-              className="absolute inset-0 w-full h-full"
-              style={{ animation: "spin 3s linear infinite" }}
-              viewBox="0 0 100 100"
-            >
-              <circle
-                cx="50" cy="50" r="46" fill="none"
-                stroke="oklch(0.52 0.22 145 / 0.25)" strokeWidth="5"
-                strokeLinecap="round"
-                strokeDasharray="20 269"
-              />
-            </svg>
-            {/* Logo + countdown number */}
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-1">
-              <img
-                src="/manus-storage/blastly-icon-512_d2809e7c.png"
-                alt="Blastly"
-                className="w-10 h-10 rounded-xl object-cover"
-              />
-              <span
-                className="text-2xl font-black tabular-nums"
-                style={{ color: "oklch(0.72 0.22 145)", fontFamily: "'Space Grotesk', sans-serif" }}
-              >
-                {countdown}
-              </span>
-            </div>
-          </div>
-
-          {/* Headline */}
-          <h2
-            className="text-2xl font-bold mb-2"
-            style={{ fontFamily: "'Space Grotesk', sans-serif", color: "oklch(0.95 0.008 240)" }}
-          >
-            Collecting your data
-          </h2>
-          <p className="text-lg font-semibold mb-6" style={{ color: "oklch(0.72 0.22 145)" }}>
-            and social media — hold tight!
-          </p>
-
-          {/* Current step */}
-          <p
-            className="text-sm mb-8 min-h-[1.5rem] transition-all duration-500"
-            style={{ color: "oklch(0.55 0.014 240)" }}
-          >
-            {ANALYSIS_STEPS[stepIndex]}
-          </p>
-
-          {/* Step dots */}
-          <div className="flex items-center justify-center gap-1.5">
-            {ANALYSIS_STEPS.map((_, i) => (
-              <div
-                key={i}
-                className="rounded-full transition-all duration-500"
-                style={{
-                  width: i === stepIndex ? "20px" : "6px",
-                  height: "6px",
-                  background: i <= stepIndex
-                    ? "oklch(0.52 0.22 145)"
-                    : "oklch(0.25 0.015 245)",
-                }}
-              />
-            ))}
-          </div>
-
-          {/* Email note */}
-          <p className="text-xs mt-8" style={{ color: "oklch(0.40 0.012 240)" }}>
-            You'll receive a copy of your audit report by email once it's complete.
-          </p>
-        </div>
-
-        {/* ── Rotating Marketing Facts Carousel ─────────────────────────── */}
-        <div className="w-full max-w-sm mt-10 mx-auto">
-          {/* Fact card */}
-          <div
-            className="rounded-2xl p-5 text-center"
-            style={{
-              background: "oklch(0.11 0.018 248)",
-              border: "1px solid oklch(0.52 0.22 145 / 0.25)",
-              transition: "opacity 0.4s ease",
-              opacity: factVisible ? 1 : 0,
-              minHeight: "130px",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "8px",
-            }}
-          >
-            {/* Big stat */}
-            <div
-              className="text-4xl font-black tabular-nums leading-none"
-              style={{ color: "oklch(0.72 0.22 145)", fontFamily: "'Space Grotesk', sans-serif" }}
-            >
-              {MARKETING_FACTS[factIndex].stat}
-            </div>
-            {/* Label */}
-            <div className="text-xs font-bold uppercase tracking-widest" style={{ color: "oklch(0.55 0.014 240)" }}>
-              {MARKETING_FACTS[factIndex].label}
-            </div>
-            {/* Detail */}
-            <p className="text-xs leading-relaxed" style={{ color: "oklch(0.50 0.012 240)" }}>
-              {MARKETING_FACTS[factIndex].detail}
-            </p>
-          </div>
-
-          {/* Dot indicators */}
-          <div className="flex items-center justify-center gap-1 mt-3">
-            {MARKETING_FACTS.map((_, i) => (
-              <div
-                key={i}
-                className="rounded-full transition-all duration-300"
-                style={{
-                  width: i === factIndex ? "16px" : "4px",
-                  height: "4px",
-                  background: i === factIndex
-                    ? "oklch(0.52 0.22 145)"
-                    : "oklch(0.22 0.015 245)",
-                }}
-              />
-            ))}
-          </div>
-
-          {/* Did you know label */}
-          <p className="text-center text-xs mt-3 font-medium" style={{ color: "oklch(0.35 0.012 240)" }}>
-            Did you know? · {factIndex + 1} of {MARKETING_FACTS.length}
-          </p>
-        </div>
-
-        <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
-      </div>
-    );
+    const normalisedUrl = url.trim()
+      ? (url.trim().startsWith("http") ? url.trim() : `https://${url.trim()}`)
+      : prefillUrl
+        ? (prefillUrl.startsWith("http") ? prefillUrl : `https://${prefillUrl}`)
+        : undefined;
+    return <AuditAnalyzingScreen website={normalisedUrl} />;
   }
 
   return (
@@ -348,17 +130,17 @@ export default function AuditPage() {
               />
               <Button
                 onClick={handleSubmit}
-                disabled={runAudit.isPending}
+                disabled={isRunning}
                 className="gap-2 h-11 px-6 rounded-xl text-white font-bold shrink-0 transition-all duration-200"
                 style={{ background: "linear-gradient(135deg, oklch(0.52 0.22 145), oklch(0.46 0.20 200))" }}
               >
-                {runAudit.isPending ? (
+                {isRunning ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
                   <Search className="w-4 h-4" />
                 )}
                 <span className="hidden sm:inline">
-                  {runAudit.isPending ? "Running…" : "Start free trial →"}
+                  {isRunning ? "Running…" : "Start free trial →"}
                 </span>
               </Button>
             </div>

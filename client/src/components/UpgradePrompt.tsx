@@ -42,7 +42,7 @@ function InlineBanner({ feature, message }: { feature?: string; message?: string
         {message || `Aria would have caught that. Upgrade to AU$75/week and never miss an enquiry again.`}
       </p>
       <Button asChild size="sm" style={{ background: GOLD, color: "#000", border: "none", fontWeight: 700, flexShrink: 0 }}>
-        <Link href="/pricing">
+        <Link href="/upgrade">
           Start My Free Trial <ArrowRight size={13} style={{ marginLeft: 4 }} />
         </Link>
       </Button>
@@ -108,7 +108,7 @@ function FullCard({ headline, message }: { headline?: string; message?: string }
           background: GOLD, color: "#000", border: "none",
           fontWeight: 700, fontSize: 15, width: "100%", padding: "14px 0",
         }}>
-          <Link href="/pricing">
+          <Link href="/upgrade">
             <Sparkles size={16} style={{ marginRight: 8 }} />
             Start My Free Trial
           </Link>
@@ -137,7 +137,7 @@ function TopBanner({ message }: { message?: string }) {
         </span>
       </div>
       <Button asChild size="sm" style={{ background: GOLD, color: "#000", border: "none", fontWeight: 700, flexShrink: 0 }}>
-        <Link href="/pricing">Start My Free Trial</Link>
+        <Link href="/upgrade">Start My Free Trial</Link>
       </Button>
     </div>
   );

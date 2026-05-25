@@ -27,6 +27,7 @@ const PLATFORMS = [
 ];
 
 const TONES = ["professional", "casual", "fun", "urgent", "inspirational", "educational"] as const;
+const NO_CAMPAIGN = "__none__";
 
 export default function Compose() {
   const { currentWorkspace } = useWorkspace();
@@ -49,7 +50,7 @@ export default function Compose() {
   const [topic, setTopic] = useState("");
   const [tone, setTone] = useState<typeof TONES[number]>("professional");
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(["twitter"]);
-  const [campaignId, setCampaignId] = useState<string>("");
+  const [campaignId, setCampaignId] = useState<string>(NO_CAMPAIGN);
   const [generatedContent, setGeneratedContent] = useState<Record<string, { content: string; hashtags: string[] }>>({});
   const [editedContent, setEditedContent] = useState<Record<string, string>>({});
   const [copied, setCopied] = useState<string | null>(null);
@@ -140,7 +141,7 @@ export default function Compose() {
       bodyText: content,
       status: scheduledAt ? "scheduled" : "draft",
       scheduledAt,
-      campaignId: campaignId ? Number(campaignId) : undefined,
+      campaignId: campaignId !== NO_CAMPAIGN ? Number(campaignId) : undefined,
       utmSource: utmSource || undefined,
       utmMedium: utmMedium || undefined,
       utmContent: utmContent || undefined,
@@ -207,7 +208,7 @@ export default function Compose() {
                   <Select value={campaignId} onValueChange={setCampaignId}>
                     <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Link to campaign" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">No campaign</SelectItem>
+                      <SelectItem value={NO_CAMPAIGN}>No campaign</SelectItem>
                       {(campaigns as any[]).map((c: any) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
                     </SelectContent>
                   </Select>

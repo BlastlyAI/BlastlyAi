@@ -41,8 +41,21 @@ If a build shipped without vars, users see a **configuration screen** (not a bla
 - **Profile** → `public.users` (auto-created by DB trigger on signup; client upserts optional fields)
 - **Workspaces** → `public.workspaces` (default workspace created by trigger)
 - **Notifications** → `public.notifications` with RLS
+- **Audit** → `POST /api/audit/run` (Vercel function or Express) → LLM analysis → `public.audit_reports`
 
 No MySQL, JWT cookie, or `customAuth` tRPC is required for authentication on Vercel.
+
+### Audit API (Supabase-only)
+
+| Endpoint | Purpose |
+|----------|---------|
+| `POST /api/audit/run` | Run website/social audit (public) |
+| `GET /api/audit/report/:token` | Fetch report by share token |
+| `GET /api/audit/list?workspaceId=` | List audits for a workspace |
+
+**Server env (Vercel + local):** `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_URL` (or `VITE_SUPABASE_URL`), `BUILT_IN_FORGE_API_URL`, `BUILT_IN_FORGE_API_KEY`
+
+**SQL:** run `supabase/migrations/00000000000003_audit_reports.sql` (included in `RUN_ALL_IN_SUPABASE.sql` after you re-merge).
 
 ### Supabase setup
 

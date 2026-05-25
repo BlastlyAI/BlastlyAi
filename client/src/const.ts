@@ -7,6 +7,11 @@ export function getAppLoginPath(returnPath?: string): string {
   return `/login?return=${encodeURIComponent(returnPath)}`;
 }
 
+export function getAppSignupPath(returnPath?: string): string {
+  if (!returnPath) return "/signup";
+  return `/signup?return=${encodeURIComponent(returnPath)}`;
+}
+
 // Generate login URL at runtime so redirect URI reflects the current origin.
 // Pass an optional returnPath (e.g. "/onboarding") to redirect there after login.
 export const getLoginUrl = (returnPath?: string) => {

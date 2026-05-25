@@ -1,7 +1,21 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
+import { useAuditReport } from "@/hooks/useAuditReport";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { resolveAuditToken } from "@/lib/auditSession";
+import { saveDashboardProfile, syncDashboardFromAuditReport } from "@/lib/dashboardProfile";
+import {
+  loadOnboardingDraft,
+  saveOnboardingDraft,
+  clearOnboardingDraft,
+} from "@/lib/onboardingSession";
+import {
+  DEFAULT_AUDIT_AGE_RANGES,
+  normalizePlatformId,
+  normalizePlatformIds,
+} from "@/lib/auditPrefill";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,39 +30,39 @@ import {
 
 // ─── Industry → recommended platforms mapping ────────────────────────────────
 const INDUSTRY_PLATFORM_RECOMMENDATIONS: Record<string, { recommended: string[]; reason: string }> = {
-  "Technology":           { recommended: ["linkedin", "twitter", "youtube", "instagram", "facebook"], reason: "Tech audiences are highly active on LinkedIn for B2B and YouTube for tutorials & demos." },
-  "Education":            { recommended: ["youtube", "instagram", "facebook", "tiktok", "linkedin"],  reason: "Educational content performs best on YouTube and TikTok — video drives enrolments." },
-  "Health & Wellness":    { recommended: ["instagram", "tiktok", "facebook", "youtube", "pinterest"], reason: "Visual transformation content thrives on Instagram, TikTok, and Pinterest." },
-  "Finance":              { recommended: ["linkedin", "twitter", "youtube", "facebook", "instagram"], reason: "Finance audiences trust LinkedIn and Twitter for credibility and thought leadership." },
-  "Retail":               { recommended: ["instagram", "facebook", "pinterest", "tiktok", "gmb"],     reason: "Retail brands need visual platforms — Instagram, Pinterest, and Google Business drive sales." },
-  "Food & Beverage":      { recommended: ["instagram", "facebook", "tiktok", "gmb", "pinterest"],    reason: "Food is one of the most visual niches — Instagram and TikTok drive massive discovery." },
-  "Travel":               { recommended: ["instagram", "youtube", "tiktok", "pinterest", "facebook"], reason: "Travel inspiration lives on Instagram, YouTube, and Pinterest." },
-  "Entertainment":        { recommended: ["tiktok", "instagram", "youtube", "twitter", "facebook"],  reason: "Entertainment content needs TikTok and YouTube for viral reach." },
-  "Real Estate":          { recommended: ["facebook", "instagram", "youtube", "linkedin", "gmb"],    reason: "Real estate buyers research on Facebook and Google — video walkthroughs convert well." },
-  "Professional Services":{ recommended: ["linkedin", "facebook", "twitter", "youtube", "gmb"],      reason: "B2B professional services win on LinkedIn — thought leadership builds trust." },
-  "Beauty & Fashion":     { recommended: ["instagram", "tiktok", "pinterest", "youtube", "facebook"], reason: "Beauty and fashion are visual-first — Instagram Reels and TikTok drive discovery." },
-  "Fitness":              { recommended: ["instagram", "tiktok", "youtube", "facebook", "pinterest"], reason: "Fitness transformation content goes viral on TikTok and Instagram." },
-  "Home & Garden":        { recommended: ["pinterest", "instagram", "facebook", "youtube", "tiktok"], reason: "Pinterest is the #1 platform for home inspiration." },
-  "Automotive":           { recommended: ["youtube", "instagram", "facebook", "tiktok", "twitter"],  reason: "Car buyers research on YouTube — reviews and walkarounds drive decisions." },
-  "Other":                { recommended: ["facebook", "instagram", "linkedin", "youtube", "tiktok"], reason: "These five platforms cover the broadest audience reach for most business types." },
+  "Technology": { recommended: ["linkedin", "twitter", "youtube", "instagram", "facebook"], reason: "Tech audiences are highly active on LinkedIn for B2B and YouTube for tutorials & demos." },
+  "Education": { recommended: ["youtube", "instagram", "facebook", "tiktok", "linkedin"], reason: "Educational content performs best on YouTube and TikTok — video drives enrolments." },
+  "Health & Wellness": { recommended: ["instagram", "tiktok", "facebook", "youtube", "pinterest"], reason: "Visual transformation content thrives on Instagram, TikTok, and Pinterest." },
+  "Finance": { recommended: ["linkedin", "twitter", "youtube", "facebook", "instagram"], reason: "Finance audiences trust LinkedIn and Twitter for credibility and thought leadership." },
+  "Retail": { recommended: ["instagram", "facebook", "pinterest", "tiktok", "gmb"], reason: "Retail brands need visual platforms — Instagram, Pinterest, and Google Business drive sales." },
+  "Food & Beverage": { recommended: ["instagram", "facebook", "tiktok", "gmb", "pinterest"], reason: "Food is one of the most visual niches — Instagram and TikTok drive massive discovery." },
+  "Travel": { recommended: ["instagram", "youtube", "tiktok", "pinterest", "facebook"], reason: "Travel inspiration lives on Instagram, YouTube, and Pinterest." },
+  "Entertainment": { recommended: ["tiktok", "instagram", "youtube", "twitter", "facebook"], reason: "Entertainment content needs TikTok and YouTube for viral reach." },
+  "Real Estate": { recommended: ["facebook", "instagram", "youtube", "linkedin", "gmb"], reason: "Real estate buyers research on Facebook and Google — video walkthroughs convert well." },
+  "Professional Services": { recommended: ["linkedin", "facebook", "twitter", "youtube", "gmb"], reason: "B2B professional services win on LinkedIn — thought leadership builds trust." },
+  "Beauty & Fashion": { recommended: ["instagram", "tiktok", "pinterest", "youtube", "facebook"], reason: "Beauty and fashion are visual-first — Instagram Reels and TikTok drive discovery." },
+  "Fitness": { recommended: ["instagram", "tiktok", "youtube", "facebook", "pinterest"], reason: "Fitness transformation content goes viral on TikTok and Instagram." },
+  "Home & Garden": { recommended: ["pinterest", "instagram", "facebook", "youtube", "tiktok"], reason: "Pinterest is the #1 platform for home inspiration." },
+  "Automotive": { recommended: ["youtube", "instagram", "facebook", "tiktok", "twitter"], reason: "Car buyers research on YouTube — reviews and walkarounds drive decisions." },
+  "Other": { recommended: ["facebook", "instagram", "linkedin", "youtube", "tiktok"], reason: "These five platforms cover the broadest audience reach for most business types." },
 };
 
 // ─── Platform data ────────────────────────────────────────────────────────────
 const ALL_PLATFORMS = [
-  { id: "facebook",   name: "Facebook",        color: "#1877F2", icon: "f" },
-  { id: "instagram",  name: "Instagram",       color: "#E4405F", icon: "📸" },
-  { id: "tiktok",     name: "TikTok",          color: "#010101", icon: "🎵", videoOnly: true },
-  { id: "twitter",    name: "Twitter / X",     color: "#000000", icon: "𝕏" },
-  { id: "linkedin",   name: "LinkedIn",        color: "#0A66C2", icon: "in" },
-  { id: "pinterest",  name: "Pinterest",       color: "#E60023", icon: "P" },
-  { id: "youtube",    name: "YouTube",         color: "#FF0000", icon: "▶" },
-  { id: "bluesky",    name: "Bluesky",         color: "#0085FF", icon: "🦋" },
-  { id: "reddit",     name: "Reddit",          color: "#FF4500", icon: "👽" },
-  { id: "threads",    name: "Threads",         color: "#000000", icon: "@" },
-  { id: "snapchat",   name: "Snapchat",        color: "#FFFC00", icon: "👻" },
-  { id: "telegram",   name: "Telegram",        color: "#26A5E4", icon: "✈" },
-  { id: "gmb",        name: "Google Business", color: "#4285F4", icon: "G" },
-  { id: "website",    name: "Your Website",    color: "#10B981", icon: "🌐" },
+  { id: "facebook", name: "Facebook", color: "#1877F2", icon: "f" },
+  { id: "instagram", name: "Instagram", color: "#E4405F", icon: "📸" },
+  { id: "tiktok", name: "TikTok", color: "#010101", icon: "🎵", videoOnly: true },
+  { id: "twitter", name: "Twitter / X", color: "#000000", icon: "𝕏" },
+  { id: "linkedin", name: "LinkedIn", color: "#0A66C2", icon: "in" },
+  { id: "pinterest", name: "Pinterest", color: "#E60023", icon: "P" },
+  { id: "youtube", name: "YouTube", color: "#FF0000", icon: "▶" },
+  { id: "bluesky", name: "Bluesky", color: "#0085FF", icon: "🦋" },
+  { id: "reddit", name: "Reddit", color: "#FF4500", icon: "👽" },
+  { id: "threads", name: "Threads", color: "#000000", icon: "@" },
+  { id: "snapchat", name: "Snapchat", color: "#FFFC00", icon: "👻" },
+  { id: "telegram", name: "Telegram", color: "#26A5E4", icon: "✈" },
+  { id: "gmb", name: "Google Business", color: "#4285F4", icon: "G" },
+  { id: "website", name: "Your Website", color: "#10B981", icon: "🌐" },
 ];
 
 const INDUSTRY_OPTIONS = [
@@ -72,7 +86,9 @@ function normaliseIndustry(raw: string | null | undefined): string {
 // Derive pre-selected platforms from audit platformScores
 function platformsFromAudit(platformScores: Record<string, unknown> | null | undefined): string[] {
   if (!platformScores) return ["facebook", "instagram", "linkedin"];
-  return Object.keys(platformScores).filter((p) => ALL_PLATFORMS.some((ap) => ap.id === p));
+  return Object.keys(platformScores)
+    .map(normalizePlatformId)
+    .filter((p) => ALL_PLATFORMS.some((ap) => ap.id === p));
 }
 
 // ─── Step indicator ───────────────────────────────────────────────────────────
@@ -87,11 +103,10 @@ function StepIndicator({ current }: { current: number }) {
         return (
           <div key={step} className="flex items-center gap-3">
             <div className="flex flex-col items-center gap-1.5">
-              <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold transition-all ${
-                done ? "bg-emerald-500 text-white" :
+              <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold transition-all ${done ? "bg-emerald-500 text-white" :
                 active ? "bg-blue-500 text-white ring-4 ring-blue-500/30" :
-                "bg-white/10 text-white/40"
-              }`}>
+                  "bg-white/10 text-white/40"
+                }`}>
                 {done ? <Check className="w-4 h-4" /> : step}
               </div>
               <span className={`text-xs font-medium ${active ? "text-white" : done ? "text-emerald-400" : "text-white/40"}`}>
@@ -129,8 +144,8 @@ function PlatformCard({ platform, state, isRecommended, onChange }: PlatformCard
 
   const borderClass =
     state === "owned" ? "border-emerald-500 bg-emerald-500/10" :
-    state === "setup"  ? "border-blue-500 bg-blue-500/10" :
-    "border-white/10 bg-white/5 hover:bg-white/8 hover:border-white/20";
+      state === "setup" ? "border-blue-500 bg-blue-500/10" :
+        "border-white/10 bg-white/5 hover:bg-white/8 hover:border-white/20";
 
   return (
     <button
@@ -161,11 +176,10 @@ function PlatformCard({ platform, state, isRecommended, onChange }: PlatformCard
 
       {/* Status pill — only shown when selected */}
       {state !== "off" && (
-        <div className={`flex items-center gap-1 rounded-full px-2 py-0.5 w-fit text-[10px] font-semibold ${
-          state === "owned"
-            ? "bg-emerald-500/20 text-emerald-300"
-            : "bg-blue-500/20 text-blue-300"
-        }`}>
+        <div className={`flex items-center gap-1 rounded-full px-2 py-0.5 w-fit text-[10px] font-semibold ${state === "owned"
+          ? "bg-emerald-500/20 text-emerald-300"
+          : "bg-blue-500/20 text-blue-300"
+          }`}>
           {state === "owned"
             ? <><Check className="w-2.5 h-2.5" /> Connected</>
             : <><Wrench className="w-2.5 h-2.5" /> Set up for me</>
@@ -175,9 +189,8 @@ function PlatformCard({ platform, state, isRecommended, onChange }: PlatformCard
 
       {/* Corner indicator */}
       {state !== "off" && (
-        <div className={`absolute top-1.5 right-1.5 w-4 h-4 rounded-full flex items-center justify-center ${
-          state === "owned" ? "bg-emerald-500" : "bg-blue-500"
-        }`}>
+        <div className={`absolute top-1.5 right-1.5 w-4 h-4 rounded-full flex items-center justify-center ${state === "owned" ? "bg-emerald-500" : "bg-blue-500"
+          }`}>
           {state === "owned"
             ? <Check className="w-2.5 h-2.5 text-white" />
             : <Wrench className="w-2.5 h-2.5 text-white" />
@@ -191,32 +204,40 @@ function PlatformCard({ platform, state, isRecommended, onChange }: PlatformCard
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function ManagedOnboarding() {
   const [, navigate] = useLocation();
+  const { user } = useAuth();
   // NOTE: wouter's useLocation() strips the query string — must use window.location.search
   const params = new URLSearchParams(window.location.search);
   const paymentSuccess = params.get("payment_success") === "1";
-  const auditToken = params.get("audit") ?? "";
-  const initialStep = paymentSuccess ? 2 : 1;
+  const isCheckoutDemo = params.get("checkout") === "demo";
+  const auditToken = useMemo(() => resolveAuditToken(), []);
+  const savedDraft = useMemo(() => loadOnboardingDraft(), []);
+  const initialStep =
+    paymentSuccess || (isCheckoutDemo && savedDraft && savedDraft.step >= 2) || (savedDraft?.step ?? 0) >= 2
+      ? 2
+      : 1;
 
   const [step, setStep] = useState(initialStep);
   const [workspaceId, setWorkspaceId] = useState<number | null>(
-    params.get("workspace") ? parseInt(params.get("workspace")!) : null
+    savedDraft?.workspaceId ?? (params.get("workspace") ? parseInt(params.get("workspace")!) : null)
   );
 
   // ── Business fields ──────────────────────────────────────────────────────────
-  const [businessName, setBusinessName] = useState("");
-  const [website, setWebsite] = useState("");
-  const [industry, setIndustry] = useState(""); // kept for backward-compat with createBrand
-  const [selectedIndustries, setSelectedIndustries] = useState<string[]>([]);
+  const [businessName, setBusinessName] = useState(savedDraft?.businessName ?? "");
+  const [website, setWebsite] = useState(savedDraft?.website ?? "");
+  const [industry, setIndustry] = useState(savedDraft?.industry ?? "");
+  const [selectedIndustries, setSelectedIndustries] = useState<string[]>(savedDraft?.selectedIndustries ?? []);
   const [otherIndustry, setOtherIndustry] = useState("");
-  const [contactEmail, setContactEmail] = useState("");
-  const [contactMobile, setContactMobile] = useState("");
-  const [description, setDescription] = useState(""); // AI/audit-generated summary
+  const [contactEmail, setContactEmail] = useState(savedDraft?.contactEmail ?? "");
+  const [contactMobile, setContactMobile] = useState(savedDraft?.contactMobile ?? "");
+  const [description, setDescription] = useState(savedDraft?.description ?? ""); // AI/audit-generated summary
+  const [services, setServices] = useState<string[]>(savedDraft?.services ?? []);
+  const [brandTone, setBrandTone] = useState(savedDraft?.brandTone ?? "");
   const [customerWords, setCustomerWords] = useState(""); // Customer's own words
   const [descriptionTab, setDescriptionTab] = useState<"ours" | "yours">("ours");
   const [geographicReach, setGeographicReach] = useState<"local" | "state" | "national" | "international">("local");
-  const [prefilled, setPrefilled] = useState(false);
+  const [prefilled, setPrefilled] = useState(initialStep >= 2 || Boolean(savedDraft?.businessName));
   // ── Extended profile fields (pre-filled from audit) ──────────────────────────
-  const [phone, setPhone] = useState("");
+  const [phone, setPhone] = useState(savedDraft?.phone ?? "");
   const [address, setAddress] = useState("");
   const [tagline, setTagline] = useState("");
   const [googleReviewUrl, setGoogleReviewUrl] = useState("");
@@ -266,13 +287,32 @@ export default function ManagedOnboarding() {
   const setupFeeTotal = setupPlatforms.length * SETUP_FEE_PER_PLATFORM;
 
   // ── Fetch audit data to pre-fill ──────────────────────────────────────────────
-  const { data: auditReport } = trpc.audit.getReport.useQuery(
-    { shareToken: auditToken },
-    { enabled: !!auditToken && !prefilled }
+  const { data: auditReport, isLoading: auditLoading } = useAuditReport(
+    auditToken,
+    !!auditToken && !prefilled && initialStep < 2
   );
 
   useEffect(() => {
-    if (auditReport && !prefilled) {
+    if (savedDraft && savedDraft.step >= 2 && savedDraft.selectedPlatforms.length > 0) {
+      setPlatformStates((prev) => {
+        const next = { ...prev };
+        for (const id of Object.keys(next)) next[id] = "off";
+        for (const id of savedDraft.selectedPlatforms) {
+          if (next[id] !== undefined) next[id] = "owned";
+        }
+        return next;
+      });
+    }
+  }, [savedDraft]);
+
+  useEffect(() => {
+    if (user?.email && !contactEmail && !prefilled) {
+      setContactEmail(user.email);
+    }
+  }, [user?.email, contactEmail, prefilled]);
+
+  useEffect(() => {
+    if (auditReport && !prefilled && initialStep < 2) {
       setBusinessName(auditReport.businessName ?? "");
       setWebsite(auditReport.website ?? "");
       const normIndustry = normaliseIndustry(auditReport.industry);
@@ -287,40 +327,58 @@ export default function ManagedOnboarding() {
       if (extractedDesc) setDescription(extractedDesc);
       else if (auditSummary) setDescription(auditSummary.slice(0, 300));
 
+      const auditServices = raw?.services as string[] | undefined;
+      if (auditServices?.length) setServices(auditServices);
+      const auditBrandTone =
+        (raw?.brandTone as string | undefined) ??
+        (raw?.brand_tone as string | undefined) ??
+        (auditReport as Record<string, unknown>).tagline as string | undefined;
+      if (auditBrandTone) {
+        setBrandTone(auditBrandTone);
+        if (!tagline) setTagline(auditBrandTone);
+      }
+
       // ── Platform states: use audit recommendedPlatforms as the single source of truth ──
       // Priority: audit AI recommendedPlatforms > detectedHandles > platformScores > industry fallback
-      const auditRecommended = (auditReport as Record<string, unknown>).recommendedPlatforms as string[] | null
-        ?? (raw?.recommendedPlatforms as string[] | null);
+      const auditRecommended = normalizePlatformIds(
+        ((auditReport as Record<string, unknown>).recommendedPlatforms as string[] | null)
+        ?? (raw?.recommendedPlatforms as string[] | null)
+      );
 
       const detectedHandles = (auditReport as Record<string, unknown>).detectedHandles as Record<string, string | null> | null
         ?? raw?.detectedHandles as Record<string, string | null> | null;
       const detectedIds = new Set<string>(
-        Object.entries(detectedHandles ?? {}).filter(([, v]) => v).map(([k]) => k)
+        Object.entries(detectedHandles ?? {})
+          .filter(([, v]) => v)
+          .map(([k]) => normalizePlatformId(k))
       );
 
       const scoredPlatforms = platformsFromAudit(auditReport.platformScores as Record<string, unknown> | null);
 
-      // Fallback if nothing detected
-      const fallback = normIndustry
-        ? (INDUSTRY_PLATFORM_RECOMMENDATIONS[normIndustry] ?? INDUSTRY_PLATFORM_RECOMMENDATIONS["Other"]).recommended.slice(0, 5)
-        : ["facebook", "instagram", "linkedin"];
+      const fallback = normalizePlatformIds(
+        normIndustry
+          ? (INDUSTRY_PLATFORM_RECOMMENDATIONS[normIndustry] ?? INDUSTRY_PLATFORM_RECOMMENDATIONS["Other"]).recommended.slice(0, 5)
+          : ["facebook", "instagram", "linkedin"]
+      );
 
-      // Platforms the business already owns (detected or scored)
+      const recommendedIds = auditRecommended.length > 0 ? auditRecommended : fallback;
+
       const ownedIds = detectedIds.size > 0
         ? detectedIds
-        : new Set(scoredPlatforms.length > 0 ? scoredPlatforms : fallback);
+        : new Set(scoredPlatforms.length > 0 ? scoredPlatforms : recommendedIds.slice(0, 3));
 
-      // Store audit-recommended platform IDs so the UI can show them in the green section
-      if (auditRecommended && auditRecommended.length > 0) {
-        setAuditRecommendedIds(auditRecommended);
+      if (recommendedIds.length > 0) {
+        setAuditRecommendedIds(recommendedIds);
       }
 
       setPlatformStates((prev) => {
         const next = { ...prev };
         for (const id of Object.keys(next)) next[id] = "off";
-        // Mark platforms the business already has as "owned"
         for (const id of Array.from(ownedIds)) {
           if (next[id] !== undefined) next[id] = "owned";
+        }
+        for (const id of recommendedIds) {
+          if (next[id] !== undefined && next[id] === "off") next[id] = "setup";
         }
         return next;
       });
@@ -336,23 +394,31 @@ export default function ManagedOnboarding() {
       // Pre-fill target audience from audit
       const auditTargetAudience = (auditReport as Record<string, unknown>).targetAudience as Record<string, unknown> | null
         ?? raw?.targetAudience as Record<string, unknown> | null;
-      if (auditTargetAudience && !audiencePrefilled) {
+      if (auditTargetAudience) {
         const ageRanges = auditTargetAudience.ageRanges as string[] | null;
-        if (ageRanges && ageRanges.length > 0) setSelectedAgeRanges(ageRanges);
+        if (ageRanges && ageRanges.length > 0) {
+          setSelectedAgeRanges(ageRanges);
+        } else {
+          setSelectedAgeRanges(DEFAULT_AUDIT_AGE_RANGES);
+        }
         const gender = auditTargetAudience.genderSkew as string | null;
         if (gender && ["male-skewed", "female-skewed", "balanced"].includes(gender)) {
           setGenderSkew(gender as "male-skewed" | "female-skewed" | "balanced");
         }
         const interests = auditTargetAudience.interests as string[] | null;
         if (interests && interests.length > 0) {
-          // Map audit interests to our predefined list where possible
           const matched = interests.filter((i: string) =>
             ALL_INTERESTS.some((a) => a.toLowerCase().includes(i.toLowerCase()) || i.toLowerCase().includes(a.toLowerCase()))
           );
           if (matched.length > 0) setSelectedInterests(matched.slice(0, 6));
         }
+        const rationale = auditTargetAudience.rationale as string | null;
+        if (rationale) setAudienceNotes(rationale);
         const radius = auditTargetAudience.locationRadiusKm as number | null;
-        if (radius !== undefined) setLocationRadiusKm(radius);
+        if (radius !== undefined && radius !== null) setLocationRadiusKm(radius);
+        setAudiencePrefilled(true);
+      } else {
+        setSelectedAgeRanges(DEFAULT_AUDIT_AGE_RANGES);
         setAudiencePrefilled(true);
       }
 
@@ -364,7 +430,15 @@ export default function ManagedOnboarding() {
       const auditLocationCity = (auditReport as Record<string, unknown>).locationCity as string | null ?? raw?.locationCity as string | null;
       const auditLocationState = (auditReport as Record<string, unknown>).locationState as string | null ?? raw?.locationState as string | null;
       const auditLocationCountry = (auditReport as Record<string, unknown>).locationCountry as string | null ?? raw?.locationCountry as string | null;
-      if (auditPhone) setPhone(auditPhone);
+      if (auditPhone) {
+        setPhone(auditPhone);
+        if (!contactMobile) setContactMobile(auditPhone);
+      }
+      const auditEmail =
+        (raw?.contactEmail as string | undefined)
+        ?? (raw?.email as string | undefined)
+        ?? (raw?.footerEmail as string | undefined);
+      if (auditEmail) setContactEmail(auditEmail);
       if (auditAddress) setAddress(auditAddress);
       if (auditTagline) setTagline(auditTagline);
       if (auditGoogleReviewUrl) setGoogleReviewUrl(auditGoogleReviewUrl);
@@ -374,7 +448,27 @@ export default function ManagedOnboarding() {
 
       setPrefilled(true);
     }
-  }, [auditReport, prefilled]);
+  }, [auditReport, prefilled, initialStep, contactEmail, contactMobile, tagline]);
+
+  function persistDashboardProfile() {
+    const base = {
+      businessName,
+      website,
+      industry: selectedIndustries[0] ?? industry,
+      services: services.length > 0 ? services : [],
+      aiSummary: description,
+      brandTone: brandTone || tagline || "Professional and modern",
+      recommendedPlatforms: selectedPlatforms,
+      targetAudience: audienceNotes || "Local customers researching online",
+      contactEmail,
+      onboardingComplete: true,
+    };
+    if (auditReport) {
+      syncDashboardFromAuditReport(auditReport, { onboardingComplete: true, merge: base });
+    } else {
+      saveDashboardProfile(base);
+    }
+  }
 
   // ── Mutations ────────────────────────────────────────────────────────────────
   const createBrand = trpc.workspace.createBrand.useMutation();
@@ -385,7 +479,7 @@ export default function ManagedOnboarding() {
   const createOnboardingCheckout = trpc.wallet.createOnboardingCheckout.useMutation();
 
   // ── Budget + QR state ─────────────────────────────────────────────────────────
-   const [selectedBudgetAud, setSelectedBudgetAud] = useState(300);
+  const [selectedBudgetAud, setSelectedBudgetAud] = useState(300);
   const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
   async function handleConfirmBudget() {
     if (!workspaceId) { toast.error("Workspace not ready — please go back and try again."); return; }
@@ -406,9 +500,28 @@ export default function ManagedOnboarding() {
         currency: detectedCurrency,
         ...(contactEmail ? { contactEmail } : {}),
       });
-      setCheckoutUrl(result.checkoutUrl);
-      // Open immediately in new tab
-      window.open(result.checkoutUrl, "_blank");
+      const checkoutUrl = result.checkoutUrl;
+      setCheckoutUrl(checkoutUrl);
+
+      // Demo / Supabase-only: do not reopen onboarding in a new tab (that resets step 1)
+      const isDemoCheckout =
+        checkoutUrl.includes("checkout=demo") ||
+        (checkoutUrl.includes("/onboarding/managed") && !checkoutUrl.includes("stripe.com"));
+
+      if (isDemoCheckout) {
+        await completeOnboarding.mutateAsync({ workspaceId, selectedPlatforms });
+        clearOnboardingDraft();
+        persistDashboardProfile();
+        toast.success("Your 14-day free trial has started — welcome to Blastly!");
+        toast("Ready for Command Centre?", {
+          description: "Upgrade anytime — audit & setup carry forward.",
+          action: { label: "Upgrade", onClick: () => navigate("/upgrade") },
+        });
+        navigate("/dashboard/home");
+        return;
+      }
+
+      window.open(checkoutUrl, "_blank");
     } catch {
       toast.error("Could not create checkout — please try again.");
     }
@@ -500,6 +613,22 @@ export default function ManagedOnboarding() {
         brandName: businessName,
         selectedPlatforms,
       });
+      saveOnboardingDraft({
+        step: 2,
+        workspaceId: ws.id,
+        businessName,
+        website,
+        industry: primaryIndustry,
+        selectedIndustries,
+        description: finalDescription ?? description,
+        contactEmail,
+        contactMobile,
+        phone,
+        selectedPlatforms,
+        auditToken,
+        services,
+        brandTone,
+      });
       setStep(2);
       window.scrollTo(0, 0);
     } catch (e: unknown) {
@@ -513,6 +642,7 @@ export default function ManagedOnboarding() {
   async function handleLaunch() {
     if (!workspaceId) return;
     await completeOnboarding.mutateAsync({ workspaceId, selectedPlatforms });
+    persistDashboardProfile();
     navigate("/dashboard/home");
   }
 
@@ -548,6 +678,12 @@ export default function ManagedOnboarding() {
         {/* ══ STEP 1: Your Business ══════════════════════════════════════════════ */}
         {step === 1 && (
           <div className="space-y-8">
+            {auditLoading && auditToken && !prefilled && (
+              <div className="flex items-center justify-center gap-2 text-sm text-white/60">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Loading your business profile from audit…
+              </div>
+            )}
             <div className="text-center space-y-2">
               <h1 className="text-3xl font-bold">
                 {prefilled ? "Does this look right?" : "Tell us about your business"}
@@ -580,11 +716,10 @@ export default function ManagedOnboarding() {
                   value={businessName}
                   onChange={(e) => setBusinessName(e.target.value)}
                   placeholder="e.g. Genius Jungle"
-                  className={`h-12 text-white placeholder:text-white/30 transition-all ${
-                    prefilled && businessName
-                      ? "bg-emerald-500/10 border-emerald-500/60 ring-2 ring-emerald-500/30 focus:ring-emerald-500/60"
-                      : "bg-white/5 border-white/60 ring-2 ring-white/40 focus:ring-white/80"
-                  }`}
+                  className={`h-12 text-white placeholder:text-white/30 transition-all ${prefilled && businessName
+                    ? "bg-emerald-500/10 border-emerald-500/60 ring-2 ring-emerald-500/30 focus:ring-emerald-500/60"
+                    : "bg-white/5 border-white/60 ring-2 ring-white/40 focus:ring-white/80"
+                    }`}
                   autoFocus
                 />
               </div>
@@ -592,18 +727,16 @@ export default function ManagedOnboarding() {
               <div>
                 <Label className="text-white/80 mb-2 block">Website</Label>
                 <div className="relative">
-                  <Globe className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${
-                    prefilled && website ? "text-emerald-400" : "text-white/30"
-                  }`} />
+                  <Globe className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${prefilled && website ? "text-emerald-400" : "text-white/30"
+                    }`} />
                   <Input
                     value={website}
                     onChange={(e) => setWebsite(e.target.value)}
                     placeholder="yourwebsite.com"
-                    className={`h-12 pl-10 text-white placeholder:text-white/30 transition-all ${
-                      prefilled && website
-                        ? "bg-emerald-500/10 border-emerald-500/60 ring-1 ring-emerald-500/30"
-                        : "bg-white/5 border-white/10"
-                    }`}
+                    className={`h-12 pl-10 text-white placeholder:text-white/30 transition-all ${prefilled && website
+                      ? "bg-emerald-500/10 border-emerald-500/60 ring-1 ring-emerald-500/30"
+                      : "bg-white/5 border-white/10"
+                      }`}
                   />
                 </div>
               </div>
@@ -628,13 +761,12 @@ export default function ManagedOnboarding() {
                           setSelectedIndustries(prev => isSelected ? prev.filter(i => i !== ind) : [...prev, ind]);
                           setIndustry(isSelected ? (selectedIndustries.filter(i => i !== ind)[0] ?? "") : ind);
                         }}
-                        className={`px-3 py-2 rounded-lg text-sm text-left transition-all border font-medium ${
-                          isSelected && prefilled
-                            ? "bg-emerald-500/20 text-emerald-100 border-emerald-500/60 shadow-lg shadow-emerald-500/20 ring-1 ring-emerald-500/40"
-                            : isSelected
+                        className={`px-3 py-2 rounded-lg text-sm text-left transition-all border font-medium ${isSelected && prefilled
+                          ? "bg-emerald-500/20 text-emerald-100 border-emerald-500/60 shadow-lg shadow-emerald-500/20 ring-1 ring-emerald-500/40"
+                          : isSelected
                             ? "bg-white text-gray-900 border-white shadow-lg shadow-white/20"
                             : "bg-white/5 border-white/10 text-white/60 hover:bg-white/10 hover:text-white/80"
-                        }`}
+                          }`}
                       >
                         {ind}
                       </button>
@@ -647,11 +779,10 @@ export default function ManagedOnboarding() {
                       const isSelected = selectedIndustries.includes("Other");
                       setSelectedIndustries(prev => isSelected ? prev.filter(i => i !== "Other") : [...prev, "Other"]);
                     }}
-                    className={`px-3 py-2 rounded-lg text-sm text-left transition-all border font-medium ${
-                      selectedIndustries.includes("Other")
-                        ? "bg-white text-gray-900 border-white shadow-lg shadow-white/20"
-                        : "bg-white/5 border-white/10 text-white/60 hover:bg-white/10 hover:text-white/80"
-                    }`}
+                    className={`px-3 py-2 rounded-lg text-sm text-left transition-all border font-medium ${selectedIndustries.includes("Other")
+                      ? "bg-white text-gray-900 border-white shadow-lg shadow-white/20"
+                      : "bg-white/5 border-white/10 text-white/60 hover:bg-white/10 hover:text-white/80"
+                      }`}
                   >
                     Other
                   </button>
@@ -668,6 +799,50 @@ export default function ManagedOnboarding() {
                   </div>
                 )}
               </div>
+
+              {(services.length > 0 || prefilled) && (
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <Label className="text-white/80">Services</Label>
+                    {services.length > 0 && prefilled && (
+                      <span className="text-xs text-emerald-400 flex items-center gap-1">
+                        <Check className="w-3 h-3" /> Detected from audit
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    {services.map((service) => (
+                      <button
+                        key={service}
+                        type="button"
+                        onClick={() => setServices(services.filter((s) => s !== service))}
+                        className="px-3 py-1.5 rounded-full text-xs font-medium border bg-emerald-500/20 text-emerald-100 border-emerald-500/50"
+                      >
+                        {service} ×
+                      </button>
+                    ))}
+                  </div>
+                  <Input
+                    className="h-10 text-white placeholder:text-white/30 bg-white/5 border-white/10"
+                    placeholder="Add a service and press Enter"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        const val = (e.target as HTMLInputElement).value.trim();
+                        if (val && !services.includes(val)) {
+                          setServices([...services, val]);
+                          (e.target as HTMLInputElement).value = "";
+                        }
+                      }
+                    }}
+                  />
+                  {brandTone && (
+                    <p className="text-xs text-violet-300/80 mt-2">
+                      <span className="text-violet-400 font-semibold">AI Recommended tone:</span> {brandTone}
+                    </p>
+                  )}
+                </div>
+              )}
 
               <div className="space-y-3">
                 <Label className="text-white/80 block">About your business</Label>
@@ -728,13 +903,12 @@ export default function ManagedOnboarding() {
                         const radiusMap = { local: 10, state: 250, national: 2000, international: null } as const;
                         setLocationRadiusKm(radiusMap[id]);
                       }}
-                      className={`px-3 py-2.5 rounded-xl text-sm text-center transition-all border font-medium flex flex-col items-center gap-0.5 ${
-                        geographicReach === id && prefilled
-                          ? "bg-emerald-500/20 text-emerald-100 border-emerald-500/60 shadow-lg shadow-emerald-500/20 ring-1 ring-emerald-500/40"
-                          : geographicReach === id
+                      className={`px-3 py-2.5 rounded-xl text-sm text-center transition-all border font-medium flex flex-col items-center gap-0.5 ${geographicReach === id && prefilled
+                        ? "bg-emerald-500/20 text-emerald-100 border-emerald-500/60 shadow-lg shadow-emerald-500/20 ring-1 ring-emerald-500/40"
+                        : geographicReach === id
                           ? "bg-white text-gray-900 border-white shadow-lg shadow-white/20"
                           : "bg-white/5 border-white/10 text-white/60 hover:bg-white/10 hover:text-white/80"
-                      }`}
+                        }`}
                     >
                       <span className="text-base">{icon}</span>
                       <span className="font-bold text-xs">{label}</span>
@@ -756,6 +930,70 @@ export default function ManagedOnboarding() {
                 )}
               </div>
 
+              {/* Age ranges */}
+              <div>
+                <Label className="text-white/70 text-xs uppercase tracking-widest mb-2 block">
+                  Age ranges <span className="text-red-400">*</span>
+                </Label>
+                <div className="flex flex-wrap gap-2">
+                  {ALL_AGE_RANGES.map((range) => {
+                    const selected = selectedAgeRanges.includes(range);
+                    const fromAudit = audiencePrefilled && selected;
+                    return (
+                      <button
+                        key={range}
+                        type="button"
+                        onClick={() => {
+                          setSelectedAgeRanges((prev) =>
+                            prev.includes(range) ? prev.filter((r) => r !== range) : [...prev, range]
+                          );
+                        }}
+                        className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${fromAudit
+                          ? "bg-emerald-500/20 text-emerald-200 border-emerald-500/50"
+                          : selected
+                            ? "bg-white/20 text-white border-white/40"
+                            : "bg-white/5 text-white/50 border-white/10 hover:bg-white/10"
+                          }`}
+                      >
+                        {range}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Interests */}
+              <div>
+                <Label className="text-white/70 text-xs uppercase tracking-widest mb-2 block">Interests</Label>
+                <div className="flex flex-wrap gap-2">
+                  {ALL_INTERESTS.map((interest) => {
+                    const selected = selectedInterests.includes(interest);
+                    const fromAudit = audiencePrefilled && selected;
+                    return (
+                      <button
+                        key={interest}
+                        type="button"
+                        onClick={() => {
+                          setSelectedInterests((prev) =>
+                            prev.includes(interest)
+                              ? prev.filter((i) => i !== interest)
+                              : prev.length < 6 ? [...prev, interest] : prev
+                          );
+                        }}
+                        className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${fromAudit
+                          ? "bg-emerald-500/20 text-emerald-200 border-emerald-500/50"
+                          : selected
+                            ? "bg-violet-500/20 text-violet-200 border-violet-500/40"
+                            : "bg-white/5 text-white/50 border-white/10 hover:bg-white/10"
+                          }`}
+                      >
+                        {interest}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               {/* Gender skew */}
               <div>
                 <Label className="text-white/70 text-xs uppercase tracking-widest mb-2 block">Gender skew</Label>
@@ -770,13 +1008,12 @@ export default function ManagedOnboarding() {
                         key={g}
                         type="button"
                         onClick={() => setGenderSkew(g)}
-                        className={`px-3 py-2 rounded-xl text-xs font-medium border transition-all flex flex-col items-center gap-0.5 ${
-                          isAudit
-                            ? "bg-emerald-500/20 text-emerald-200 border-emerald-500/50 ring-1 ring-emerald-500/30"
-                            : isSelected
+                        className={`px-3 py-2 rounded-xl text-xs font-medium border transition-all flex flex-col items-center gap-0.5 ${isAudit
+                          ? "bg-emerald-500/20 text-emerald-200 border-emerald-500/50 ring-1 ring-emerald-500/30"
+                          : isSelected
                             ? "bg-white/20 text-white border-white/40"
                             : "bg-white/5 text-white/50 border-white/10 hover:bg-white/10 hover:text-white/80"
-                        }`}
+                          }`}
                       >
                         <span>{icons[g]}</span>
                         <span>{labels[g]}</span>
@@ -833,9 +1070,8 @@ export default function ManagedOnboarding() {
               <Label className="text-white/80 mb-2 block">Logo (optional)</Label>
               <label
                 htmlFor="onboarding-logo-input"
-                className={`block w-full rounded-xl border-2 border-dashed cursor-pointer transition-all ${
-                  isDragging ? "border-blue-400 bg-blue-500/10" : "border-white/20 bg-white/5 hover:border-white/40 hover:bg-white/8"
-                }`}
+                className={`block w-full rounded-xl border-2 border-dashed cursor-pointer transition-all ${isDragging ? "border-blue-400 bg-blue-500/10" : "border-white/20 bg-white/5 hover:border-white/40 hover:bg-white/8"
+                  }`}
                 onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
                 onDragLeave={() => setIsDragging(false)}
                 onDrop={handleLogoDrop}
@@ -911,22 +1147,20 @@ export default function ManagedOnboarding() {
                             <button
                               type="button"
                               onClick={() => handlePlatformChange(platform.id, state === "setup" ? "off" : "setup")}
-                              className={`px-2 py-0.5 rounded text-[9px] font-semibold transition-all ${
-                                state === "setup"
-                                  ? "bg-white/15 text-white ring-1 ring-white/30"
-                                  : "bg-white/5 text-white/25 hover:bg-white/10 hover:text-white/50"
-                              }`}
+                              className={`px-2 py-0.5 rounded text-[9px] font-semibold transition-all ${state === "setup"
+                                ? "bg-white/15 text-white ring-1 ring-white/30"
+                                : "bg-white/5 text-white/25 hover:bg-white/10 hover:text-white/50"
+                                }`}
                             >
                               Set Up
                             </button>
                             <button
                               type="button"
                               onClick={() => handlePlatformChange(platform.id, state === "owned" ? "off" : "owned")}
-                              className={`px-2 py-0.5 rounded text-[9px] font-semibold transition-all ${
-                                state === "owned"
-                                  ? "bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/40"
-                                  : "bg-white/5 text-white/25 hover:bg-white/10 hover:text-white/50"
-                              }`}
+                              className={`px-2 py-0.5 rounded text-[9px] font-semibold transition-all ${state === "owned"
+                                ? "bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/40"
+                                : "bg-white/5 text-white/25 hover:bg-white/10 hover:text-white/50"
+                                }`}
                             >
                               Connect
                             </button>
@@ -959,22 +1193,20 @@ export default function ManagedOnboarding() {
                           <button
                             type="button"
                             onClick={() => handlePlatformChange(platform.id, state === "setup" ? "off" : "setup")}
-                            className={`px-2 py-0.5 rounded text-[9px] font-semibold transition-all ${
-                              state === "setup"
-                                ? "bg-white/15 text-white ring-1 ring-white/30"
-                                : "bg-white/5 text-white/25 hover:bg-white/10 hover:text-white/50"
-                            }`}
+                            className={`px-2 py-0.5 rounded text-[9px] font-semibold transition-all ${state === "setup"
+                              ? "bg-white/15 text-white ring-1 ring-white/30"
+                              : "bg-white/5 text-white/25 hover:bg-white/10 hover:text-white/50"
+                              }`}
                           >
                             Set Up
                           </button>
                           <button
                             type="button"
                             onClick={() => handlePlatformChange(platform.id, state === "owned" ? "off" : "owned")}
-                            className={`px-2 py-0.5 rounded text-[9px] font-semibold transition-all ${
-                              state === "owned"
-                                ? "bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/40"
-                                : "bg-white/5 text-white/25 hover:bg-white/10 hover:text-white/50"
-                            }`}
+                            className={`px-2 py-0.5 rounded text-[9px] font-semibold transition-all ${state === "owned"
+                              ? "bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/40"
+                              : "bg-white/5 text-white/25 hover:bg-white/10 hover:text-white/50"
+                              }`}
                           >
                             Connect
                           </button>

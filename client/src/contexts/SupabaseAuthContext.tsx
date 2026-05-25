@@ -12,6 +12,8 @@ import SupabaseConfigError from "@/components/SupabaseConfigError";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
 import { getSupabaseEnvConfig } from "@/lib/supabaseEnv";
 import { fetchUserProfile } from "@/lib/supabaseProfile";
+import { syncPublicUserApi } from "@/lib/usersApi";
+import { loadDashboardProfile } from "@/lib/dashboardProfile";
 import { supabaseSignOut } from "@/lib/supabaseAuth";
 import type { AppUser } from "@/types/appUser";
 
@@ -46,6 +48,15 @@ function SupabaseAuthProviderInner({
         setUser(null);
         return;
       }
+      await syncPublicUserApi({
+        email: nextSession.user.email,
+        displayName:
+          typeof nextSession.user.user_metadata?.full_name === "string"
+            ? nextSession.user.user_metadata.full_name
+            : null,
+        businessName: loadDashboardProfile()?.businessName,
+        website: loadDashboardProfile()?.website,
+      });
       const profile = await fetchUserProfile(nextSession.user, supabase);
       setUser(profile);
       localStorage.setItem("blastly-user-info", JSON.stringify(profile));
@@ -54,6 +65,8 @@ function SupabaseAuthProviderInner({
   );
 
   const refresh = useCallback(async () => {
+    // Defer: calling getSession inside onAuthStateChange causes a Supabase auth deadlock.
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
     const { data, error: sessionError } = await supabase.auth.getSession();
     if (sessionError) throw sessionError;
     setSession(data.session ?? null);
@@ -77,16 +90,21 @@ function SupabaseAuthProviderInner({
       }
     })();
 
-    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession);
-      try {
-        await loadProfile(nextSession);
-        setError(null);
-      } catch (e) {
-        setError(e instanceof Error ? e : new Error(String(e)));
-      } finally {
-        setLoading(false);
-      }
+      // Never await auth/profile work directly in this callback (Supabase deadlock).
+      setTimeout(() => {
+        void (async () => {
+          try {
+            await loadProfile(nextSession);
+            setError(null);
+          } catch (e) {
+            setError(e instanceof Error ? e : new Error(String(e)));
+          } finally {
+            setLoading(false);
+          }
+        })();
+      }, 0);
     });
 
     return () => {

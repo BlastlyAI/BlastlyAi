@@ -311,3 +311,68 @@ html:not(.dark) {
   0%   { transform: translateX(0); }
   100% { transform: translateX(-50%); }
 }
+
+/* Premium audit analyzing screen */
+.audit-analyzing-bg {
+  background-image:
+    radial-gradient(ellipse 70% 50% at 50% -10%, oklch(0.52 0.22 145 / 0.12), transparent),
+    radial-gradient(ellipse 50% 40% at 90% 80%, oklch(0.52 0.18 220 / 0.08), transparent);
+}
+
+.audit-orb {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(60px);
+  opacity: 0.45;
+  animation: audit-orb-float 8s ease-in-out infinite;
+}
+
+.audit-orb-1 {
+  width: 280px;
+  height: 280px;
+  top: -80px;
+  left: 10%;
+  background: oklch(0.52 0.22 145 / 0.35);
+}
+
+.audit-orb-2 {
+  width: 220px;
+  height: 220px;
+  bottom: 10%;
+  right: 5%;
+  background: oklch(0.52 0.18 220 / 0.3);
+  animation-delay: -3s;
+}
+
+.audit-orb-3 {
+  width: 160px;
+  height: 160px;
+  top: 40%;
+  right: 25%;
+  background: oklch(0.60 0.18 285 / 0.25);
+  animation-delay: -5s;
+}
+
+.audit-progress-fill {
+  background: linear-gradient(90deg, oklch(0.52 0.22 145), oklch(0.55 0.20 200), oklch(0.52 0.22 145));
+  background-size: 200% 100%;
+  animation: shimmer 2s linear infinite;
+}
+
+.audit-step-active {
+  box-shadow: 0 0 24px oklch(0.52 0.22 145 / 0.15);
+}
+
+@keyframes phase1-message-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.phase1-audit-message {
+  animation: phase1-message-in 0.45s ease-out;
+}
+
+@keyframes audit-orb-float {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-12px) scale(1.05); }
+}

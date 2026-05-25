@@ -33,6 +33,7 @@ import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Button } from "./ui/button";
 import { toast } from "sonner";
+import { usePlanAccess } from "@/hooks/usePlanAccess";
 
 // ─── 4-Stage sidebar structure ────────────────────────────────────────────────
 const STAGE_GROUPS = [
@@ -138,7 +139,8 @@ export default function DashboardLayout({
           </div>
           <Button
             onClick={() => {
-              window.location.href = getAppLoginPath();
+              const returnTo = window.location.pathname + window.location.search;
+              window.location.href = getAppLoginPath(returnTo);
             }}
             size="lg"
             className="w-full shadow-lg hover:shadow-xl transition-all"
@@ -175,6 +177,11 @@ function DashboardLayoutContent({
   setSidebarWidth,
 }: DashboardLayoutContentProps) {
   const { user, logout } = useAuth();
+  const { isPaid } = usePlanAccess();
+  const stageGroups = STAGE_GROUPS.map((g) => ({
+    ...g,
+    locked: g.stage > 1 && !isPaid,
+  }));
   const [location, setLocation] = useLocation();
   const { state, toggleSidebar } = useSidebar();
   const isCollapsed = state === "collapsed";
@@ -219,7 +226,7 @@ function DashboardLayoutContent({
     <>
       <div className="relative" ref={sidebarRef}>
         <Sidebar
-          collapsible="icon"
+          collapsible="offcanvas"
           className="border-r-0"
           disableTransition={isResizing}
         >
@@ -237,7 +244,7 @@ function DashboardLayoutContent({
           </SidebarHeader>
 
           <SidebarContent className="gap-0 overflow-y-auto">
-            {STAGE_GROUPS.map((group) => (
+            {stageGroups.map((group) => (
               <div key={group.stage} className={`mb-1 ${group.locked ? "opacity-50" : ""}`}>
                 {/* Stage header */}
                 {!isCollapsed && (
@@ -282,8 +289,9 @@ function DashboardLayoutContent({
                           <SidebarMenuButton
                             tooltip={`${item.label} — unlocks after trial`}
                             onClick={() =>
-                              toast.info(`${group.label} unlocks after your 30-day trial`, {
-                                description: "Complete Stage 1 first — post in under 30 seconds!",
+                              toast.info(`${group.label} unlocks with Blastly Pro`, {
+                                description: "Upgrade — your audit and onboarding carry forward.",
+                                action: { label: "Upgrade", onClick: () => setLocation("/upgrade") },
                               })
                             }
                             className="h-9 font-normal cursor-not-allowed select-none"
@@ -374,7 +382,7 @@ function DashboardLayoutContent({
             </div>
           </div>
         )}
-        <main className="flex-1 p-4">{children}</main>
+        <main className="flex-1">{children}</main>
       </SidebarInset>
     </>
   );

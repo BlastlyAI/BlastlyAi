@@ -2,7 +2,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { useWorkspace, type Workspace } from "@/contexts/WorkspaceContext";
 import type { AppUser } from "@/types/appUser";
 import { fetchUnreadNotificationCount } from "@/lib/supabaseNotifications";
-import { trpc } from "@/lib/trpc";
+import { createWorkspaceApi } from "@/lib/workspaceApi";
 import { getAppLoginPath } from "@/const";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -68,22 +68,39 @@ function CreateBrandModal({
 }: {
   open: boolean;
   onClose: () => void;
-  onCreated: (ws: { id: number; name: string }) => void;
+  onCreated: (ws: Workspace) => void;
 }) {
   const [name, setName] = useState("");
   const [website, setWebsite] = useState("");
   const [industry, setIndustry] = useState("");
-  const utils = trpc.useUtils();
+  const [pending, setPending] = useState(false);
+  const { refetch } = useWorkspace();
 
-  const createBrand = trpc.workspace.createBrand.useMutation({
-    onSuccess: (ws) => {
-      utils.workspace.list.invalidate();
-      toast.success(`Brand "${ws?.name}" created!`, { description: "Set up your brand profile to get the best AI results." });
-      onCreated(ws as { id: number; name: string });
-      setName(""); setWebsite(""); setIndustry("");
-    },
-    onError: (err) => toast.error("Could not create brand", { description: err.message }),
-  });
+  async function submitBrand() {
+    if (!name.trim()) return;
+    setPending(true);
+    try {
+      const ws = await createWorkspaceApi({
+        name: name.trim(),
+        website: website.trim() || undefined,
+        industry: industry.trim() || undefined,
+      });
+      await refetch();
+      toast.success(`Brand "${ws.name}" created!`, {
+        description: "Set up your brand profile to get the best AI results.",
+      });
+      onCreated(ws);
+      setName("");
+      setWebsite("");
+      setIndustry("");
+    } catch (err) {
+      toast.error("Could not create brand", {
+        description: err instanceof Error ? err.message : "Unknown error",
+      });
+    } finally {
+      setPending(false);
+    }
+  }
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
@@ -106,7 +123,7 @@ function CreateBrandModal({
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Genius Jungle"
               className="bg-[oklch(0.10_0.015_250)] border-white/10"
-              onKeyDown={(e) => { if (e.key === "Enter" && name.trim()) createBrand.mutate({ name: name.trim(), website, industry }); }}
+              onKeyDown={(e) => { if (e.key === "Enter" && name.trim()) void submitBrand(); }}
             />
           </div>
           <div className="space-y-1.5">
@@ -132,11 +149,11 @@ function CreateBrandModal({
           <div className="flex gap-2 pt-2">
             <Button variant="outline" onClick={onClose} className="flex-1">Cancel</Button>
             <Button
-              onClick={() => createBrand.mutate({ name: name.trim(), website, industry })}
-              disabled={!name.trim() || createBrand.isPending}
+              onClick={() => void submitBrand()}
+              disabled={!name.trim() || pending}
               className="flex-1 bg-[oklch(0.55_0.28_220)] hover:bg-[oklch(0.60_0.28_220)] text-white gap-2"
             >
-              {createBrand.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+              {pending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
               Create Brand
             </Button>
           </div>
@@ -168,13 +185,11 @@ function SidebarContent({
 }) {
   const [createOpen, setCreateOpen] = useState(false);
   const [, navigate] = useLocation();
-  const utils = trpc.useUtils();
   const { theme, toggleTheme, switchable } = useTheme();
 
-  function handleBrandCreated(_ws: { id: number; name: string }) {
-    utils.workspace.list.invalidate().then(() => {});
+  function handleBrandCreated(ws: Workspace) {
+    setCurrentWorkspace(ws);
     setCreateOpen(false);
-    onClose?.();
     navigate("/dashboard/brand-profile");
   }
 
@@ -494,9 +509,8 @@ export default function AppLayout({ children, title }: { children: ReactNode; ti
 
       {/* Mobile sidebar drawer */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-64 flex flex-col h-full transform transition-transform duration-300 ease-in-out lg:hidden ${
-          sidebarOpen ? "translate-x-0" : "-translate-x-full"
-        }`}
+        className={`fixed inset-y-0 left-0 z-50 w-64 flex flex-col h-full transform transition-transform duration-300 ease-in-out lg:hidden ${sidebarOpen ? "translate-x-0" : "-translate-x-full"
+          }`}
       >
         <SidebarContent {...sidebarProps} onClose={() => setSidebarOpen(false)} />
       </aside>

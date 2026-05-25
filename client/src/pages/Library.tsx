@@ -29,6 +29,8 @@ const TYPE_COLORS: Record<string, string> = {
   snippet: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
 };
 
+const ALL_PLATFORMS_VALUE = "__all__";
+
 export default function Library() {
   const { currentWorkspace } = useWorkspace();
   const wsId = currentWorkspace?.id ?? 0;
@@ -37,7 +39,7 @@ export default function Library() {
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [showDialog, setShowDialog] = useState(false);
-  const [form, setForm] = useState({ name: "", type: "template" as "template" | "hashtag_set" | "brand_asset", content: "", tags: "", platform: "" });
+  const [form, setForm] = useState({ name: "", type: "template" as "template" | "hashtag_set" | "brand_asset", content: "", tags: "", platform: ALL_PLATFORMS_VALUE });
 
   const { data: items = [], isLoading } = trpc.library.list.useQuery({ workspaceId: wsId }, { enabled: !!wsId });
   const createMutation = trpc.library.create.useMutation({
@@ -49,7 +51,7 @@ export default function Library() {
     onError: (e) => toast.error(e.message),
   });
 
-  const resetForm = () => setForm({ name: "", type: "template", content: "", tags: "", platform: "" });
+  const resetForm = () => setForm({ name: "", type: "template", content: "", tags: "", platform: ALL_PLATFORMS_VALUE });
 
   const filteredItems = (items as any[]).filter((item: any) => {
     const matchesSearch = !search || item.name?.toLowerCase().includes(search.toLowerCase()) || item.content?.toLowerCase().includes(search.toLowerCase());
@@ -65,7 +67,7 @@ export default function Library() {
       type: form.type,
       content: form.content,
       tags: form.tags ? form.tags.split(",").map((t) => t.trim()).filter(Boolean) : undefined,
-      platforms: form.platform ? [form.platform] : undefined,
+      platforms: form.platform && form.platform !== ALL_PLATFORMS_VALUE ? [form.platform] : undefined,
     });
   };
 
@@ -219,7 +221,7 @@ export default function Library() {
               <Select value={form.platform} onValueChange={(v) => setForm({ ...form, platform: v })}>
                 <SelectTrigger><SelectValue placeholder="All platforms" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All platforms</SelectItem>
+                  <SelectItem value={ALL_PLATFORMS_VALUE}>All platforms</SelectItem>
                   <SelectItem value="twitter">Twitter/X</SelectItem>
                   <SelectItem value="linkedin">LinkedIn</SelectItem>
                   <SelectItem value="facebook">Facebook</SelectItem>

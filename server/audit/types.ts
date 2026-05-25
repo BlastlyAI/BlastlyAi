@@ -1,0 +1,74 @@
+export type RunAuditInput = {
+  businessName: string;
+  industry?: string;
+  website?: string;
+  handles?: {
+    twitter?: string;
+    linkedin?: string;
+    facebook?: string;
+    instagram?: string;
+  };
+  adSpend?: number;
+  workspaceId?: string | null;
+  userId?: string | null;
+};
+
+export type RunAuditResponse = {
+  shareToken: string;
+  businessName: string;
+  industry: string | null;
+  businessDescription: string | null;
+  tagline: string | null;
+  detectedHandles: Record<string, string | null> | null;
+  geographicReach: string | null;
+  locationCity: string | null;
+  locationState: string | null;
+  locationCountry: string | null;
+  phone: string | null;
+  address: string | null;
+  googleReviewUrl: string | null;
+  recommendedPlatforms: string[] | null;
+  overallScore: number;
+  contentScore: number;
+  adQualityScore: number;
+  engagementScore: number;
+  growthScore: number;
+  socialPresenceScore: number;
+  confirmedPlatformCount: number;
+  dataConfidence: "real" | "inferred";
+  platformScores?: unknown;
+  findings?: unknown;
+  recommendations?: unknown;
+  blastlyPitch?: unknown;
+  [key: string]: unknown;
+};
+
+export type StoredAuditReport = {
+  id: string;
+  shareToken: string;
+  workspaceId: string | null;
+  userId: string | null;
+  createdBy: string | null;
+  businessName: string;
+  industry: string | null;
+  website: string | null;
+  handles: unknown;
+  description: string | null;
+  detectedHandles: unknown;
+  geographicReach: string | null;
+  adSpend: number | null;
+  overallScore: number | null;
+  platformScores: unknown;
+  contentScore: number | null;
+  adQualityScore: number | null;
+  engagementScore: number | null;
+  growthScore: number | null;
+  cyberSecurityScore: number | null;
+  findings: unknown;
+  recommendations: unknown;
+  blastlyPitch: unknown;
+  rawReport: Record<string, unknown>;
+  createdAt: string;
+  recommendedPlatforms?: string[] | null;
+  targetAudience?: Record<string, unknown> | null;
+};

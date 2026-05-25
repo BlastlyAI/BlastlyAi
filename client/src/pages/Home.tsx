@@ -19,6 +19,7 @@ function ThemeToggleButton() {
     </button>
   );
 }
+import AuditTriggerForm from "@/components/AuditTriggerForm";
 import { useLocation } from "wouter";
 import AdSpendSlider from "@/components/AdSpendSlider";
 
@@ -632,57 +633,8 @@ function AnimatedWord() {
 }
 
 // ── URL Audit Input ────────────────────────────────────────────────────────
-function AuditInput({ loginUrl }: { loginUrl: string }) {
-  const [url, setUrl] = useState("");
-  const [, navigate] = useLocation();
-
-  function runAudit() {
-    const trimmed = url.trim();
-    if (!trimmed) {
-      // Focus the input instead of silently doing nothing
-      document.querySelector<HTMLInputElement>('input[placeholder*="yourcompany"]')?.focus();
-      return;
-    }
-    const normalised = trimmed.startsWith("http") ? trimmed : `https://${trimmed}`;
-    navigate(`/audit?url=${encodeURIComponent(normalised)}`);
-  }
-
-  return (
-    <div className="w-full max-w-2xl mx-auto">
-      <div
-        className="flex items-center gap-2 p-2 rounded-2xl"
-        style={{
-          background: "oklch(0.17 0.012 245 / 0.90)",
-          border: "1px solid oklch(0.62 0.18 220 / 0.35)",
-          boxShadow: "0 0 50px oklch(0.52 0.18 220 / 0.12), 0 8px 32px rgba(0,0,0,0.35)",
-        }}
-      >
-        <Globe className="w-5 h-5 ml-3 flex-shrink-0" style={{ color: "oklch(0.62 0.18 220)" }} />
-        <input
-          type="text"
-          value={url}
-          onChange={e => setUrl(e.target.value)}
-          onKeyDown={e => e.key === "Enter" && runAudit()}
-          placeholder="Enter your website — e.g. yourcompany.com"
-          className="flex-1 bg-transparent outline-none text-foreground placeholder:text-muted-foreground text-base px-2 py-2"
-          autoComplete="off"
-          spellCheck={false}
-        />
-        <Button
-          type="button"
-          onClick={runAudit}
-          size="default"
-          className="btn-gradient text-white font-bold px-6 py-3 rounded-xl flex-shrink-0 text-base"
-        >
-          Get Free Audit
-          <ArrowRight className="w-4 h-4 ml-1.5" />
-        </Button>
-      </div>
-      <p className="text-sm font-semibold mt-3 text-center" style={{ color: "oklch(0.78 0.10 220)" }}>
-        No account needed &nbsp;·&nbsp; Results in 60 seconds &nbsp;·&nbsp; 100% free
-      </p>
-    </div>
-  );
+function AuditInput(_props: { loginUrl: string }) {
+  return <AuditTriggerForm variant="card" inputId="audit-input-card" />;
 }
 
 // ── Scrolling ticker phrases ──────────────────────────────────────────────
@@ -1605,15 +1557,7 @@ const ROW_BASE: React.CSSProperties = {
 };
 
 function HeroThreePanels({ loginUrl, isAuthenticated }: { loginUrl: string; isAuthenticated: boolean }) {
-  const [, navigate] = useLocation();
-  const [auditUrl, setAuditUrl] = useState("");
   const [heroTab, setHeroTab] = useState<"trial" | "audit">("trial");
-  function runAudit() {
-    const trimmed = auditUrl.trim();
-    if (!trimmed) return;
-    const normalised = trimmed.startsWith("http") ? trimmed : `https://${trimmed}`;
-    navigate(`/audit?url=${encodeURIComponent(normalised)}`);
-  }
 
   const BG = "oklch(0.13 0.012 245)";
   const BORDER = "1px solid oklch(0.26 0.012 245 / 0.70)";
@@ -1678,37 +1622,7 @@ function HeroThreePanels({ loginUrl, isAuthenticated }: { loginUrl: string; isAu
             Nine layers of real market intelligence — all from one website URL in 60 seconds.
           </p>
 
-          {/* CTA — website URL input */}
-          <form
-            onSubmit={e => {
-              e.preventDefault();
-              const trimmed = auditUrl.trim();
-              if (!trimmed) return;
-              const normalised = trimmed.startsWith("http") ? trimmed : `https://${trimmed}`;
-              window.location.href = `/audit?url=${encodeURIComponent(normalised)}&trial=1`;
-            }}
-            className="max-w-xl mx-auto"
-          >
-            <div className="flex items-center gap-3">
-              <input
-                id="audit-input"
-                type="text"
-                value={auditUrl}
-                onChange={e => setAuditUrl(e.target.value)}
-                placeholder="yourwebsite.com.au"
-                className="flex-1 px-4 py-3 rounded-xl text-sm text-white placeholder-white/30 border focus:outline-none focus:border-emerald-400/60 transition-colors"
-                style={{ background: "oklch(0.16 0.012 245 / 0.90)", border: "2px solid rgba(255,255,255,0.55)" }}
-              />
-              <button
-                type="submit"
-                className="px-6 py-3 rounded-xl text-sm font-bold text-white whitespace-nowrap shrink-0"
-                style={{ background: "linear-gradient(135deg, oklch(0.52 0.22 145), oklch(0.46 0.20 200))", boxShadow: "0 4px 20px oklch(0.52 0.22 145 / 0.35)" }}
-              >
-                Free audit →
-              </button>
-            </div>
-
-          </form>
+          <AuditTriggerForm variant="hero" inputId="audit-input" />
 
         </div>
 

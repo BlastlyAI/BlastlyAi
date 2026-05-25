@@ -121,5 +121,8 @@ export function formatSupabaseAuthError(error: {
   if (/already registered|already been registered|user already exists/i.test(msg)) {
     return "This email is already registered. Try logging in instead.";
   }
+  if (error.code === "invalid_credentials" || /invalid login credentials/i.test(msg)) {
+    return "Wrong email or password. Use Forgot password, or sign up with a new email.";
+  }
   return msg;
 }

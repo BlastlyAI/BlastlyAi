@@ -12,6 +12,11 @@ import { handleHealthCheck } from "../healthMonitor";
 import { startTrialReminderCron } from "../trialReminder";
 import { appRouter } from "../routers";
 import pdfRouter from "../routes/intelligenceReportPdf";
+import { registerAuditApiRoutes } from "../routes/auditApi";
+import { registerBillingApiRoutes } from "../routes/billingApi";
+import { registerUserApiRoutes } from "../routes/userApi";
+import { registerWorkspaceApiRoutes } from "../routes/workspaceApi";
+import { warnIfAuditTableMissing } from "../audit/startupCheck";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 
@@ -58,6 +63,11 @@ async function startServer() {
   });
   // Intelligence Report PDF export
   app.use(pdfRouter);
+  // Supabase-native audit API (works without MySQL when service role is set)
+  registerAuditApiRoutes(app);
+  registerBillingApiRoutes(app);
+  registerUserApiRoutes(app);
+  registerWorkspaceApiRoutes(app);
 
   // tRPC API
   app.use(
@@ -83,6 +93,7 @@ async function startServer() {
 
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
+    void warnIfAuditTableMissing();
     // Start background cron jobs
     startTrialReminderCron();
   });

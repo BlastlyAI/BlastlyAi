@@ -44,6 +44,7 @@ import AppsPage from "./pages/AppsPage";
 import SeoHealth from "./pages/SeoHealth";
 import DigitalPresence from "./pages/DigitalPresence";
 import CompetitorIntelligence from "./pages/CompetitorIntelligence";
+import DashboardSettings from "./pages/DashboardSettings";
 import BrandProfile from "./pages/BrandProfile";
 import AdminDashboard from "./pages/AdminDashboard";
 import ConnectedApps from "./pages/ConnectedApps";
@@ -79,8 +80,10 @@ import AppointmentsPage from "./pages/AppointmentsPage";
 import ServiceMenuPage from "./pages/ServiceMenuPage";
 import BookingPortalPage from "./pages/BookingPortalPage";
 import LoyaltySettingsPage from "./pages/LoyaltySettingsPage";
-// Command Centre — client home page
-import CommandCentre from "./pages/CommandCentre";
+import PremiumDashboardHome from "./pages/PremiumDashboardHome";
+import UpgradePage from "./pages/UpgradePage";
+import UpgradeSuccessPage from "./pages/UpgradeSuccessPage";
+import { PaidCommandCentreGuard, FreeDashboardGuard } from "./components/PlanRouteGuard";
 // Intelligence Report
 import IntelligenceReportPage from "./pages/IntelligenceReportPage";
 // Beta
@@ -89,6 +92,22 @@ import FeedbackButton from "./components/FeedbackButton";
 // Custom auth screens
 import { AuthEntry, AuthSignup, AuthLogin, AuthForgotPassword, AuthResetPassword, AuthWelcome } from "./pages/AuthPages";
 
+
+function GuardedPremiumHome() {
+  return (
+    <FreeDashboardGuard>
+      <PremiumDashboardHome />
+    </FreeDashboardGuard>
+  );
+}
+
+function GuardedCommandCentre() {
+  return (
+    <PaidCommandCentreGuard>
+      <CommandCentreBI />
+    </PaidCommandCentreGuard>
+  );
+}
 
 function Router() {
   return (
@@ -100,6 +119,7 @@ function Router() {
       <Route path="/forgot-password" component={AuthForgotPassword} />
       <Route path="/reset-password" component={AuthResetPassword} />
       <Route path="/welcome" component={AuthWelcome} />
+      <Route path="/settings/channels">{() => <Redirect to="/dashboard/connections" />}</Route>
       {/* Public routes */}
       <Route path="/" component={Home} />
       <Route path="/audit" component={AuditPage} />
@@ -117,13 +137,17 @@ function Router() {
       <Route path="/onboarding/complete" component={OnboardingComplete} />
       <Route path="/onboarding/managed" component={ManagedOnboarding} />
 
-      {/* Command Centre — AI-gatekeeper daily command screen (default after login) */}
-      <Route path="/command" component={CommandCentreBI} />
+      <Route path="/upgrade" component={UpgradePage} />
+      <Route path="/upgrade/success" component={UpgradeSuccessPage} />
+
+      {/* Command Centre — paid only */}
+      <Route path="/command-centre" component={GuardedCommandCentre} />
+      <Route path="/command" component={GuardedCommandCentre} />
       {/* Quick Setup — rapid-fire approve flow for connections */}
       <Route path="/quick-setup" component={QuickSetup} />
       {/* Legacy redirects */}
-      <Route path="/intelligence">{() => { if (typeof window !== "undefined") window.location.replace("/command"); return null; }}</Route>
-      <Route path="/field">{() => { if (typeof window !== "undefined") window.location.replace("/command"); return null; }}</Route>
+      <Route path="/intelligence">{() => { if (typeof window !== "undefined") window.location.replace("/command-centre"); return null; }}</Route>
+      <Route path="/field">{() => { if (typeof window !== "undefined") window.location.replace("/command-centre"); return null; }}</Route>
       {/* Contacts & SMS Campaigns */}
       <Route path="/contacts" component={ContactsPage} />
       <Route path="/sms-campaigns" component={SmsCampaignsPage} />
@@ -134,13 +158,12 @@ function Router() {
       {/* Public booking portal — no login required */}
       <Route path="/book/:slug" component={BookingPortalPage} />
 
-      {/* Command Centre — redirect /dashboard/home to the real Command Centre at /command */}
-      <Route path="/dashboard/home">{() => { if (typeof window !== "undefined") window.location.replace("/command"); return null; }}</Route>
+      <Route path="/dashboard/home" component={GuardedPremiumHome} />
       {/* Business AI Intelligence Feed (full version) */}
       <Route path="/dashboard/live-feed" component={IntelligenceFeed} />
 
       {/* Dashboard routes — /dashboard redirects to Command Centre by default */}
-      <Route path="/dashboard">{() => <Redirect to="/command" />}</Route>
+      <Route path="/dashboard">{() => <Redirect to="/dashboard/home" />}</Route>
       <Route path="/dashboard/overview" component={Dashboard} />
       <Route path="/dashboard/compose" component={Compose} />
       <Route path="/dashboard/calendar" component={CalendarPage} />
@@ -149,6 +172,7 @@ function Router() {
       <Route path="/dashboard/connections" component={Connections} />
       <Route path="/dashboard/library" component={Library} />
       <Route path="/dashboard/team" component={Team} />
+      <Route path="/dashboard/settings" component={DashboardSettings} />
       <Route path="/dashboard/notifications" component={Notifications} />
       <Route path="/dashboard/ad-studio" component={AdStudio} />
 
@@ -193,7 +217,7 @@ function Router() {
 }
 
 // Standalone screens that should not show global marketing chrome
-const STANDALONE_PATHS = ["/command", "/intelligence", "/field", "/contacts", "/sms-campaigns", "/book/", "/auth", "/signup", "/login", "/forgot-password", "/reset-password", "/welcome"];
+const STANDALONE_PATHS = ["/command", "/command-centre", "/upgrade", "/intelligence", "/field", "/contacts", "/sms-campaigns", "/book/", "/auth", "/signup", "/login", "/forgot-password", "/reset-password", "/welcome"];
 
 function AppShell() {
   const [location] = useLocation();

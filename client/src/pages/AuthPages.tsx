@@ -18,7 +18,15 @@ import {
   getSupabaseErrorMessage,
   supabaseGetSession,
 } from "@/lib/supabaseAuth";
-import { upsertUserProfile, completeWelcome, fetchUserProfile } from "@/lib/supabaseProfile";
+import {
+  syncUserProfileAfterAuth,
+  profileFromAuthUser,
+  completeWelcome,
+  fetchUserProfile,
+} from "@/lib/supabaseProfile";
+import { getAppSignupPath } from "@/const";
+import { getAuthReturnPath, getPostAuthRoute } from "@/lib/authRouting";
+import { attachGuestAuditAfterAuth } from "@/lib/attachGuestAudit";
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const BG = "#02020c";
@@ -242,10 +250,10 @@ function SocialAuthButtons() {
         }}
       >
         <svg width="16" height="16" viewBox="0 0 24 24">
-          <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-          <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-          <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
-          <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+          <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
+          <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+          <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
+          <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
         </svg>
         Google
       </button>
@@ -268,7 +276,7 @@ function SocialAuthButtons() {
         }}
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
+          <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z" />
         </svg>
         Apple
       </button>
@@ -299,7 +307,7 @@ export function AuthEntry() {
 
   useEffect(() => {
     if (loading || !user) return;
-    navigate(user.welcomeCompleted ? "/command" : "/welcome");
+    navigate(getPostAuthRoute({ welcomeCompleted: user.welcomeCompleted }));
   }, [user, loading, navigate]);
 
   return (
@@ -366,9 +374,11 @@ export function AuthSignup() {
   const isPremium = planParam === "everything";
 
   function getPostSignupRoute(welcomeCompleted: boolean) {
-    if (welcomeCompleted) return "/command";
-    if (isPremium) return "/onboarding/managed?plan=everything";
-    return "/welcome";
+    return getPostAuthRoute({
+      welcomeCompleted,
+      isPremiumSignup: isPremium,
+      returnPath: getAuthReturnPath(),
+    });
   }
 
   useEffect(() => {
@@ -395,25 +405,33 @@ export function AuthSignup() {
 
     setAuthBusy(true);
     let createdAuthUser: { id: string } | null = null;
+    const profileFields = {
+      displayName: nameTrim,
+      businessName: businessName.trim() || undefined,
+      industry: industrySlug.trim() || undefined,
+    };
     try {
       const sb = await supabaseSignUp(emailTrim, password, {
         data: { full_name: nameTrim },
       });
       if (sb.error) {
+        const loginTry = await supabaseSignIn(emailTrim, password);
+        if (loginTry.data.session && loginTry.data.user) {
+          toast.success("You already have an account — logged you in.");
+          const profile = await syncUserProfileAfterAuth(loginTry.data.user, profileFields);
+          await attachGuestAuditAfterAuth();
+          navigate(getPostSignupRoute(profile.welcomeCompleted));
+          return;
+        }
         toast.error(formatSupabaseAuthError(sb.error));
         return;
       }
 
       const authUser = sb.data.user;
-      const profileFields = {
-        displayName: nameTrim,
-        businessName: businessName.trim() || undefined,
-        industry: industrySlug.trim() || undefined,
-      };
 
       // Email confirmation ON: user created but no session yet
       if (authUser && !sb.data.session) {
-        await upsertUserProfile(authUser, profileFields);
+        void syncUserProfileAfterAuth(authUser, profileFields);
         toast.success("Account created. Check your email to confirm, then log in.");
         navigate("/login");
         return;
@@ -424,12 +442,8 @@ export function AuthSignup() {
         const loginTry = await supabaseSignIn(emailTrim, password);
         if (loginTry.data.session && loginTry.data.user) {
           toast.success("You already have an account — logged you in.");
-          try {
-            await refresh();
-          } catch {
-            /* session exists; profile loads on next page */
-          }
-          const profile = await fetchUserProfile(loginTry.data.user);
+          const profile = await syncUserProfileAfterAuth(loginTry.data.user, profileFields);
+          await attachGuestAuditAfterAuth();
           navigate(getPostSignupRoute(profile.welcomeCompleted));
           return;
         }
@@ -442,15 +456,10 @@ export function AuthSignup() {
       }
 
       createdAuthUser = authUser;
-      const profile = await upsertUserProfile(authUser, profileFields);
-
-      try {
-        await refresh();
-      } catch (refreshErr) {
-        console.warn("[Blastly] refresh after signup:", refreshErr);
-      }
+      const profile = await syncUserProfileAfterAuth(authUser, profileFields);
 
       toast.success("Account created — welcome to Blastly!");
+      await attachGuestAuditAfterAuth();
       navigate(getPostSignupRoute(profile.welcomeCompleted));
     } catch (e) {
       const msg = getSupabaseErrorMessage(e, "Sign up failed");
@@ -458,12 +467,12 @@ export function AuthSignup() {
 
       if (createdAuthUser || sessionAfterError) {
         toast.success("Account created. You're logged in.");
-        try {
-          await refresh();
-        } catch {
-          /* keep going — auth session is valid */
-        }
-        navigate("/welcome");
+        const authUser = sessionAfterError?.user ?? null;
+        navigate(
+          getPostSignupRoute(
+            authUser ? profileFromAuthUser(authUser, profileFields).welcomeCompleted : false
+          )
+        );
         return;
       }
 
@@ -484,7 +493,7 @@ export function AuthSignup() {
             : msg
         );
       }
-      await supabaseSignOut().catch(() => {});
+      await supabaseSignOut().catch(() => { });
     } finally {
       setAuthBusy(false);
     }
@@ -595,7 +604,7 @@ export function AuthSignup() {
 // ─────────────────────────────────────────────────────────────────────────────
 export function AuthLogin() {
   const [, navigate] = useLocation();
-  const { user, loading, refresh } = useAuth();
+  const { user, loading } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(true);
@@ -603,7 +612,7 @@ export function AuthLogin() {
 
   useEffect(() => {
     if (loading || !user) return;
-    navigate(user.welcomeCompleted ? "/command" : "/welcome");
+    navigate(getPostAuthRoute({ welcomeCompleted: user.welcomeCompleted }));
   }, [user, loading, navigate]);
 
   const handleSubmit = async () => {
@@ -621,32 +630,27 @@ export function AuthLogin() {
         return;
       }
       if (res.data.user) {
-        const profile = await fetchUserProfile(res.data.user);
-        await refresh();
-        navigate(profile.welcomeCompleted ? "/command" : "/welcome");
+        const profile = await syncUserProfileAfterAuth(res.data.user);
+        await attachGuestAuditAfterAuth();
+        navigate(getPostAuthRoute({ welcomeCompleted: profile.welcomeCompleted }));
         return;
       }
-      await refresh();
-      navigate("/command");
+      navigate(getPostAuthRoute({ welcomeCompleted: true }));
     } catch (e) {
       const msg = getSupabaseErrorMessage(e, "Login failed");
       const sessionAfterError = await supabaseGetSession().catch(() => null);
 
       if (sessionAfterError?.user) {
-        try {
-          await refresh();
-        } catch {
-          /* session valid */
-        }
-        const profile = await fetchUserProfile(sessionAfterError.user);
+        const profile = await syncUserProfileAfterAuth(sessionAfterError.user);
         toast.success("Welcome back!");
-        navigate(profile.welcomeCompleted ? "/command" : "/welcome");
+        await attachGuestAuditAfterAuth();
+        navigate(getPostAuthRoute({ welcomeCompleted: profile.welcomeCompleted }));
         return;
       }
 
       if (/invalid login|invalid credentials|invalid_grant/i.test(msg)) {
         toast.error("Wrong email or password.");
-        await supabaseSignOut().catch(() => {});
+        await supabaseSignOut().catch(() => { });
       } else {
         toast.error(msg);
       }
@@ -708,7 +712,7 @@ export function AuthLogin() {
 
       <p style={{ textAlign: "center", marginTop: "20px", fontSize: "12px", color: MUTED }}>
         Don't have an account?{" "}
-        <Link href="/signup">
+        <Link href={getAppSignupPath(getAuthReturnPath() ?? undefined)}>
           <span style={{ color: GOLD, cursor: "pointer" }}>Set up for free</span>
         </Link>
       </p>
@@ -855,7 +859,7 @@ export function AuthResetPassword() {
       }
       toast.success("Password updated — you are now logged in.");
       await refresh();
-      navigate("/command");
+      navigate(getPostAuthRoute({ welcomeCompleted: true }));
     } finally {
       setBusy(false);
     }
@@ -918,7 +922,7 @@ const WELCOME_STEPS = [
     title: "Connect your social accounts",
     desc: "Link Facebook, Instagram, Google Business, TikTok and more in one place.",
     action: "Connect now",
-    href: "/settings/channels",
+    href: "/dashboard/connections",
   },
   {
     icon: "🔍",
@@ -932,7 +936,7 @@ const WELCOME_STEPS = [
     title: "Explore your dashboard",
     desc: "See your intelligence feed, post queue, calendar, and command centre.",
     action: "Open dashboard",
-    href: "/command",
+    href: "/dashboard/home",
   },
 ];
 
@@ -943,7 +947,16 @@ export function AuthWelcome() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (!loading && !user) navigate("/login");
+    if (loading || user) return;
+    let cancelled = false;
+    void (async () => {
+      const session = await supabaseGetSession();
+      if (cancelled || session) return;
+      navigate("/login");
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [loading, user, navigate]);
 
   const markWelcomeComplete = async () => {
@@ -964,7 +977,9 @@ export function AuthWelcome() {
   };
 
   const handleSkip = () => {
-    void markWelcomeComplete().then(() => navigate("/command"));
+    void markWelcomeComplete().then(() =>
+      navigate(getPostAuthRoute({ welcomeCompleted: true, returnPath: getAuthReturnPath() }))
+    );
   };
 
   return (

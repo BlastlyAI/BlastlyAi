@@ -1,0 +1,25 @@
+export type AuditPersistPayload = {
+  shareToken: string;
+  workspaceId: string | null;
+  userId: string | null;
+  createdBy: string | null;
+  businessName: string;
+  industry: string | null;
+  website: string | null;
+  handles: unknown;
+  description: string | null;
+  detectedHandles: unknown;
+  geographicReach: string | null;
+  adSpend: number | null;
+  overallScore: number;
+  platformScores: unknown;
+  contentScore: number;
+  adQualityScore: number;
+  engagementScore: number;
+  growthScore: number;
+  cyberSecurityScore: number | null;
+  findings: unknown;
+  recommendations: unknown;
+  blastlyPitch: unknown;
+  rawReport: Record<string, unknown>;
+};
