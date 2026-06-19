@@ -72,6 +72,8 @@ import CommandCentreBI from "./pages/CommandCentreBI";
 import QuickSetup from "./pages/QuickSetup";
 // Beta Test Checklist
 import BetaTestChecklist from "./pages/BetaTestChecklist";
+// Business path pages
+import OnlineBusinessPage from "./pages/OnlineBusiness";
 // Contacts & SMS Campaigns
 import ContactsPage from "./pages/Contacts";
 import SmsCampaignsPage from "./pages/SmsCampaigns";
@@ -208,6 +210,8 @@ function Router() {
       {/* Social Setup 3-step guide */}
       <Route path="/social-setup" component={SocialSetupWrapper} />
       <Route path="/beta-test" component={BetaTestChecklist} />
+      {/* Business path pages */}
+      <Route path="/online" component={OnlineBusinessPage} />
       {/* PWA Install Guide — public */}
       <Route path="/install" component={InstallGuide} />
       <Route path="/404" component={NotFound} />

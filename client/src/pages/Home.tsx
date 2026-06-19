@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { getLoginUrl } from "@/const";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
-import { ArrowRight, Zap, Target, TrendingUp, CheckCircle, Menu, X, Globe, Search, BarChart2, Users, Sun, Moon, Sparkles, Rocket, MapPin, Trophy, Radar, Send } from "lucide-react";
+import { ArrowRight, Zap, Target, TrendingUp, CheckCircle, Menu, X, Globe, Search, BarChart2, Users, Sun, Moon, Sparkles, Rocket, MapPin, Trophy, Radar, Send, Building2, ShoppingBag, Laptop } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
 
 function ThemeToggleButton() {
@@ -1634,6 +1634,205 @@ function HeroThreePanels({ loginUrl, isAuthenticated }: { loginUrl: string; isAu
   );
 }
 
+// ── Business Path Selector ────────────────────────────────────────────────
+function BusinessPathSection() {
+  const [, navigate] = useLocation();
+  const GOLD = "#d4a843";
+  const paths = [
+    {
+      icon: Building2,
+      label: "Local Business",
+      sub: "Tradies · retail · hospitality · professional services",
+      href: "/local",
+      accent: "oklch(0.52 0.22 145)",
+      glow: "oklch(0.52 0.22 145 / 0.18)",
+    },
+    {
+      icon: ShoppingBag,
+      label: "E-Commerce",
+      sub: "Shopify · dropshipping · Etsy · print on demand",
+      href: "/ecommerce",
+      accent: "oklch(0.65 0.18 60)",
+      glow: "oklch(0.65 0.18 60 / 0.18)",
+    },
+    {
+      icon: Laptop,
+      label: "Online Business",
+      sub: "Digital products · services · SaaS · apps · memberships",
+      href: "/online",
+      accent: "oklch(0.60 0.20 240)",
+      glow: "oklch(0.60 0.20 240 / 0.18)",
+    },
+  ];
+  return (
+    <section
+      style={{
+        background: "#02020c",
+        padding: "0 24px 64px",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: 24,
+        borderBottom: "1px solid rgba(255,255,255,0.04)",
+      }}
+    >
+      {/* Section label */}
+      <div style={{ textAlign: "center", marginBottom: 4 }}>
+        <p
+          style={{
+            fontFamily: "'DM Mono', monospace",
+            fontSize: 10,
+            letterSpacing: "0.25em",
+            textTransform: "uppercase",
+            color: GOLD,
+            marginBottom: 8,
+          }}
+        >
+          Choose your path
+        </p>
+        <h2
+          style={{
+            fontFamily: "'Space Grotesk', sans-serif",
+            fontSize: "clamp(1.2rem, 2.5vw, 1.6rem)",
+            fontWeight: 700,
+            color: "#fff",
+            lineHeight: 1.2,
+            margin: 0,
+          }}
+        >
+          What kind of business are you growing?
+        </h2>
+      </div>
+
+      {/* Three boxes */}
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 20,
+          justifyContent: "center",
+          width: "100%",
+          maxWidth: 900,
+        }}
+      >
+        {paths.map(({ icon: Icon, label, sub, href, accent, glow }) => (
+          <button
+            key={href}
+            onClick={() => navigate(href)}
+            style={{
+              background: "oklch(0.13 0.014 245 / 0.95)",
+              border: `1.5px solid ${accent}`,
+              borderRadius: 16,
+              padding: "28px 24px",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "flex-start",
+              gap: 12,
+              flex: "1 1 240px",
+              maxWidth: 280,
+              cursor: "pointer",
+              textAlign: "left",
+              transition: "transform 0.18s ease, box-shadow 0.18s ease",
+              boxShadow: `0 4px 24px ${glow}`,
+            }}
+            onMouseEnter={e => {
+              (e.currentTarget as HTMLButtonElement).style.transform = "translateY(-3px)";
+              (e.currentTarget as HTMLButtonElement).style.boxShadow = `0 8px 32px ${glow}`;
+            }}
+            onMouseLeave={e => {
+              (e.currentTarget as HTMLButtonElement).style.transform = "translateY(0)";
+              (e.currentTarget as HTMLButtonElement).style.boxShadow = `0 4px 24px ${glow}`;
+            }}
+            onMouseDown={e => { (e.currentTarget as HTMLButtonElement).style.transform = "scale(0.97)"; }}
+            onMouseUp={e => { (e.currentTarget as HTMLButtonElement).style.transform = "translateY(-3px)"; }}
+          >
+            <div
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: 12,
+                background: `${accent}22`,
+                border: `1px solid ${accent}44`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Icon size={22} style={{ color: accent }} />
+            </div>
+            <div>
+              <p
+                style={{
+                  fontFamily: "'Space Grotesk', sans-serif",
+                  fontSize: 17,
+                  fontWeight: 700,
+                  color: "#fff",
+                  margin: 0,
+                  marginBottom: 4,
+                }}
+              >
+                {label}
+              </p>
+              <p
+                style={{
+                  fontFamily: "'DM Mono', monospace",
+                  fontSize: 10,
+                  color: "oklch(0.50 0.04 245)",
+                  margin: 0,
+                  lineHeight: 1.5,
+                  letterSpacing: "0.02em",
+                }}
+              >
+                {sub}
+              </p>
+            </div>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                marginTop: 4,
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: "'DM Mono', monospace",
+                  fontSize: 11,
+                  fontWeight: 600,
+                  color: accent,
+                  letterSpacing: "0.08em",
+                }}
+              >
+                Get Started
+              </span>
+              <ArrowRight size={13} style={{ color: accent }} />
+            </div>
+          </button>
+        ))}
+      </div>
+
+      {/* Audit link */}
+      <a
+        href="/audit"
+        style={{
+          fontFamily: "'DM Mono', monospace",
+          fontSize: 11,
+          letterSpacing: "0.12em",
+          textTransform: "uppercase",
+          color: "oklch(0.48 0.03 245)",
+          textDecoration: "none",
+          marginTop: 4,
+          transition: "color 0.18s ease",
+        }}
+        onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.color = GOLD; }}
+        onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.color = "oklch(0.48 0.03 245)"; }}
+      >
+        Already have a store or business? Run a Free Audit →
+      </a>
+    </section>
+  );
+}
+
 // ── Main page ──────────────────────────────────────────────────────────────
 export default function Home() {
   const loginUrl = "/signup";
@@ -1761,6 +1960,8 @@ export default function Home() {
       {/* ── Hero ─────────────────────────────────────────────────────────── */}
       <HeroThreePanels loginUrl={loginUrl} isAuthenticated={isAuthenticated} />
 
+      {/* ── Business Path Selector ──────────────────────────────────────── */}
+      <BusinessPathSection />
       {/* ── Cinema Ring ─────────────────────────────────────────────────── */}
       <CinemaRingSection loginUrl={loginUrl} />
 
